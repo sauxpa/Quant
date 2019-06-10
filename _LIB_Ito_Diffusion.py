@@ -172,7 +172,7 @@ class GBM(Ito_diffusion_1d):
     dX_t = drift*X_t*dt + vol*X_t*dW_t
     where drift and vol are real numbers
     """
-    def __init__(self, x0=1, T=1, scheme_steps=100, drift=0, vol=1,                barrier=None, barrier_condition=None):
+    def __init__(self, x0=1, T=1, scheme_steps=100, drift=0, vol=1,                 barrier=None, barrier_condition=None):
         super().__init__(x0, T, scheme_steps,                         barrier=barrier, barrier_condition=barrier_condition)
         self._drift_double = np.float(drift)
         self._vol_double = np.float(vol)
@@ -199,6 +199,64 @@ class GBM(Ito_diffusion_1d):
 
 
 # In[6]:
+
+
+class SLN(Ito_diffusion_1d):
+    """Instantiate Ito_diffusion to simulate a shifted lognormal diffusion
+    dX_t = drift*X_t*dt + sigma*(shift*X_t+(mixing-shift)*X_0+(1-m)*L)*dW_t
+    where drift and vol are real numbers
+    """
+    def __init__(self, x0=1, T=1, scheme_steps=100,                 drift=0, sigma=0, shift=0, mixing=0, L=0,                 barrier=None, barrier_condition=None):
+        super().__init__(x0, T, scheme_steps,                         barrier=barrier, barrier_condition=barrier_condition)
+        self._drift_double = drift
+        self._sigma = sigma
+        self._shift = shift
+        self._mixing = mixing
+        self._L = L    
+        
+    @property
+    def drift_double(self):
+        return self._drift_double
+    @drift_double.setter
+    def drift_double(self, new_drift):
+        self._drift_double = new_drift
+    
+    @property
+    def sigma(self):
+        return self._sigma
+    @sigma.setter
+    def sigma(self, new_sigma):
+        self._sigma = float(new_sigma)
+    
+    @property
+    def shift(self):
+        return self._shift
+    @shift.setter
+    def shift(self, new_shift):
+        self._shift = new_shift
+     
+    @property
+    def mixing(self):
+        return self._mixing
+    @mixing.setter
+    def mixing(self, new_mixing):
+        self._mixing = new_mixing
+        
+    @property
+    def L(self):
+        return self._L
+    @L.setter
+    def L(self, new_L):
+        self._L = new_L
+        
+    def drift(self, t, x):
+        return self.drift_double * x
+    
+    def vol(self, t, x):
+        return self.sigma*(self.shift*x+(self.mixing-self.shift)*self.x0+(1-self.mixing)*self.L)
+
+
+# In[7]:
 
 
 class Vasicek(Ito_diffusion_1d):
@@ -240,7 +298,7 @@ class Vasicek(Ito_diffusion_1d):
         return self.vol_double
 
 
-# In[7]:
+# In[8]:
 
 
 class CIR(Ito_diffusion_1d):
@@ -288,7 +346,7 @@ class CIR(Ito_diffusion_1d):
         return self.vol_double * np.sqrt(x)
 
 
-# In[8]:
+# In[9]:
 
 
 class pseudo_GBM(Ito_diffusion_1d):
@@ -322,7 +380,7 @@ class pseudo_GBM(Ito_diffusion_1d):
         return self.vol_double*x
 
 
-# In[9]:
+# In[10]:
 
 
 class Pinned_diffusion(Ito_diffusion_1d):
@@ -371,7 +429,7 @@ class Pinned_diffusion(Ito_diffusion_1d):
         return df
 
 
-# In[10]:
+# In[11]:
 
 
 class Alpha_pinned_BM(Pinned_diffusion):
@@ -408,7 +466,7 @@ class Alpha_pinned_BM(Pinned_diffusion):
        return self.vol_double
 
 
-# In[11]:
+# In[12]:
 
 
 class F_pinned_BM(Pinned_diffusion):
@@ -438,7 +496,7 @@ class F_pinned_BM(Pinned_diffusion):
 
 # ## Multidimensional diffusions
 
-# In[12]:
+# In[13]:
 
 
 class Ito_diffusion_multi_d(Ito_diffusion):
@@ -493,7 +551,7 @@ class Ito_diffusion_multi_d(Ito_diffusion):
         return df
 
 
-# In[13]:
+# In[14]:
 
 
 class BM_multi_d(Ito_diffusion_multi_d):
@@ -528,7 +586,7 @@ class BM_multi_d(Ito_diffusion_multi_d):
         return self.vol_matrix
 
 
-# In[14]:
+# In[15]:
 
 
 class GBM_multi_d(Ito_diffusion_multi_d):
@@ -563,7 +621,7 @@ class GBM_multi_d(Ito_diffusion_multi_d):
         return np.multiply(x,self.vol_matrix.T).T
 
 
-# In[15]:
+# In[16]:
 
 
 class SABR(Ito_diffusion_multi_d):
@@ -622,7 +680,7 @@ class SABR(Ito_diffusion_multi_d):
 # 
 # Note that this is indeed equivalent to sampling diffusion paths driven by Brownian motions with correlation $\alpha$ with the original process.
 
-# In[16]:
+# In[17]:
 
 
 class Ito_diffusion_sheaf(Ito_diffusion):
@@ -670,7 +728,7 @@ class Ito_diffusion_sheaf(Ito_diffusion):
         return df
 
 
-# In[17]:
+# In[18]:
 
 
 class BM_sheaf(Ito_diffusion_sheaf):
@@ -690,7 +748,7 @@ class BM_sheaf(Ito_diffusion_sheaf):
         return self._vol_double
 
 
-# In[18]:
+# In[19]:
 
 
 class GBM_sheaf(Ito_diffusion_sheaf):
@@ -710,7 +768,7 @@ class GBM_sheaf(Ito_diffusion_sheaf):
         return self._vol_double * x
 
 
-# In[19]:
+# In[20]:
 
 
 class Vasicek_sheaf(Ito_diffusion_sheaf):
@@ -752,7 +810,7 @@ class Vasicek_sheaf(Ito_diffusion_sheaf):
         return self.vol_double
 
 
-# In[20]:
+# In[21]:
 
 
 class CIR_sheaf(Ito_diffusion_sheaf):
@@ -800,7 +858,7 @@ class CIR_sheaf(Ito_diffusion_sheaf):
         return self.vol_double * np.sqrt(x)
 
 
-# In[21]:
+# In[22]:
 
 
 class pseudo_GBM_sheaf(Ito_diffusion_sheaf):
@@ -834,7 +892,7 @@ class pseudo_GBM_sheaf(Ito_diffusion_sheaf):
         return self.vol_double*x
 
 
-# In[22]:
+# In[23]:
 
 
 class Pinned_diffusion_sheaf(Ito_diffusion_sheaf):
@@ -884,7 +942,7 @@ class Pinned_diffusion_sheaf(Ito_diffusion_sheaf):
         return df
 
 
-# In[23]:
+# In[24]:
 
 
 class Alpha_pinned_BM_sheaf(Pinned_diffusion_sheaf):
@@ -907,7 +965,7 @@ class Alpha_pinned_BM_sheaf(Pinned_diffusion_sheaf):
         return self._vol_double
 
 
-# In[24]:
+# In[25]:
 
 
 class F_pinned_BM_sheaf(Pinned_diffusion_sheaf):
@@ -937,7 +995,7 @@ class F_pinned_BM_sheaf(Pinned_diffusion_sheaf):
 
 # ## Multifractal diffusions
 
-# In[25]:
+# In[26]:
 
 
 class Lognormal_multifractal():
@@ -1066,7 +1124,7 @@ class Lognormal_multifractal():
         return df
 
 
-# In[26]:
+# In[27]:
 
 
 class Lognormal_multifractal():
