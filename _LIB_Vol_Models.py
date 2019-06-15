@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from scipy.stats import norm
 from scipy.misc import derivative
 from scipy.optimize import brentq
+from scipy.integrate import quad
 from functools import partial
 from functools import lru_cache
 import _LIB_Ito_Diffusion as Ito
@@ -649,4 +650,163 @@ class SABR_MC(SABR_base_model):
             
         price = self.option_price(K, payoff=payoff)
         return self.IV.vol_from_price(price, self.f, K, self.T_expiry, payoff=payoff)
+
+
+# ## Normal SABR
+# 
+# SABR formula for $\beta=0$ with an adjusted $\sigma_0$ to account for the actual local vol in the model.
+
+# In[11]:
+
+
+class SABR_Goes_Normal(SABR_base_model):
+    """SABR model with beta = 0 and ajusted sigma_0 to account for the actual local vol.
+    Lognormal quoting.
+    """
+    def __init__(self, beta=0, vov=1, rho=0,                 ATM=None, sigma_0=None, f=None, T_expiry=1,                 vol_type='LN', marking_mode='ATM',                 moneyness_lo=-3, moneyness_hi=3, n_strikes=50,                 n_integral=1, moneyness_switch_lo=-2, moneyness_switch_hi=2):
+        super().__init__(beta=beta, vov=vov, rho=rho,                         ATM=ATM, sigma_0=sigma_0, f=f, T_expiry=T_expiry,                         vol_type=vol_type, marking_mode=marking_mode,                         moneyness_lo=moneyness_lo, moneyness_hi=moneyness_hi,                         n_strikes=n_strikes)
+        # number of discretization step of the integral in the approximation formula 
+        self._n_integral = n_integral
+        
+        # boundaries to determine the choice of pricing model
+        # around ATM : price from adjusted normal vol expansion
+        # outside ATM : local vol integration
+        self._moneyness_switch_lo = moneyness_lo
+        self._moneyness_switch_hi = moneyness_switch_hi
+    
+    @property
+    def n_integral(self):
+        return self._n_integral
+    @n_integral.setter
+    def n_integral(self, new_n_integral):
+        self._n_integral = new_n_integral
+    
+    @property
+    def step_integral(self):
+        return self.T_expiry/self._n_integral
+        
+    def sigma_0_effective(self, K):
+        """Adjusted initial vol to match first order of ATM expansion when using
+        normal SABR as base model
+        """
+        if np.abs(K-self.f)<ONE_BP/100:
+            return self.sigma_0*(self.f**self.beta)
+        else:
+            return self.sigma_0*(1-self.beta)*(K-self.f)/(K**(1-self.beta)-self.f**(1-self.beta))
+    
+    def vov_scaled(self, K):
+        """Helper function for the call/put price approximation
+        """
+        return self.vov/self.sigma_0_effective(K)
+    
+    def q(self, z, K):
+        """Helper function for the call/put price approximation
+        """
+        return 1-2*self.rho*self.vov_scaled(K)*z+(self.vov_scaled(K)**2)*(z**2)
+
+    def J(self, x, K):
+        """Helper function for the call/put price approximation
+        """
+        X_0 = self.f-K
+        num = np.sqrt(self.q(x, K))-self.rho+self.vov_scaled(K)*x
+        denom = np.sqrt(self.q(X_0, K))-self.rho+self.vov_scaled(K)*X_0
+        return 1/(self.vov_scaled(K)*self.sigma_0_effective(K))*np.log(num/denom)
+
+    def dJ(self, x, K):
+        """Helper function for the call/put price approximation
+        """
+        num = (self.vov_scaled(K)**2*x-self.vov_scaled(K)*self.rho)/np.sqrt(self.q(x, K))        +self.vov_scaled(K)
+        denom = np.sqrt(self.q(x, K))-self.rho+self.vov_scaled(K)*x
+        return 1/(self.vov_scaled(K)*self.sigma_0_effective(K))*num/denom
+    
+    def local_time(self, t, x, K=None):
+        """Density of (S_t-K)/(alpha_t) at x under the stochastic vol measure
+        """
+        return 1/np.sqrt(2*np.pi*t)*self.dJ(x, K)*np.exp(-self.J(x, K)**2/(2*t))
+    
+    def integrand(self, K, t, x):
+        """Integrand to compute E[J^-1(W_t)], used as an adjustment for the missing drift
+        """
+        return self.local_time(t, x, K)*x
+    
+    def option_price(self, K, payoff='Call'):
+        """Returns the call/put price approximation derived for normal SABR
+        in "SABR Goes Normal".
+        """
+        if np.log(self.f/K) > self._moneyness_switch_lo        and np.log(self.f/K) < self._moneyness_switch_hi:
+            return self.IV.price_from_vol(self.smile_func(K), self.f, K, self.T_expiry,                                          payoff=payoff)
+        else:
+            X_0 = self.f-K
+            intrinsic_value = max(X_0, 0)
+
+            s = 0
+            time_steps = [t*self.step_integral for t in range(self.n_integral)]
+
+            for t in time_steps:
+                t_next = t + self.step_integral
+                t_mid = 0.5*(t+t_next)
+
+                f = partial( self.integrand, K, t_mid )
+                L = X_0 - quad(f, -np.inf, np.inf, limit=10)[0]
+
+                s += self.local_time(t_mid, -L, K=K)*self.step_integral
+
+            return intrinsic_value+0.5*self.sigma_0_effective(K)**2*s
+
+    @abc.abstractmethod
+    def smile_func(self, K):
+        pass
+
+
+# In[12]:
+
+
+class SABR_Goes_Normal_LN(SABR_Goes_Normal):
+    """SABR model with beta = 0 and ajusted sigma_0 to account for the actual local vol.
+    Lognormal quoting.
+    """
+    def __init__(self, beta=0, vov=1, rho=0,                 ATM=None, sigma_0=None, f=None, T_expiry=1,                 marking_mode='ATM',                 moneyness_lo=-3, moneyness_hi=3, n_strikes=50,                 n_integral=1, moneyness_switch_lo=-1, moneyness_switch_hi=1):
+        super().__init__(beta=beta, vov=vov, rho=rho,                         ATM=ATM, sigma_0=sigma_0, f=f, T_expiry=T_expiry,                         vol_type='LN', marking_mode=marking_mode,                         moneyness_lo=moneyness_lo, moneyness_hi=moneyness_hi,                         n_strikes=n_strikes, n_integral=n_integral,                         moneyness_switch_lo=moneyness_switch_lo,                         moneyness_switch_hi=moneyness_switch_hi)
+        
+    def smile_func(self, K):
+        """Hagan normal smile approximation around ATM for beta = 0 as written in the
+        original 'Managing Smile Risk' paper (A.70a)
+        K: strike
+        """
+        b_0 = self.sigma_0_effective(K)
+        if np.abs(K-self.f)<ONE_BP/100:
+            return b_0/self.f*(1                               + ((b_0**2)/(24*self.f**2) + (2-3*self.rho**2)/24*self.vov**2)                               *self.T_expiry)
+        else:
+            log_moneyness = np.log(self.f/K)
+            f_avg = np.sqrt(self.f*K)
+            zeta = self.vov/b_0*f_avg*log_moneyness
+            q_zeta = 1-2*self.rho*zeta+zeta**2
+            x_zeta = np.log((np.sqrt(q_zeta)-self.rho+zeta)/(1-self.rho))
+
+            return b_0*log_moneyness/(self.f-K)*zeta/x_zeta*                (1 + ((b_0**2)/(24*self.f*K) + (2-3*self.rho**2)/24*self.vov**2)*self.T_expiry)
+
+
+# In[13]:
+
+
+class SABR_Goes_Normal_N(SABR_Goes_Normal):
+    """SABR model with beta = 0 and ajusted sigma_0 to account for the actual local vol.
+    Normal quoting.
+    """
+    def __init__(self, beta=0, vov=1, rho=0,                 ATM=None, sigma_0=None, f=None, T_expiry=1,                 marking_mode='ATM',                 moneyness_lo=-3, moneyness_hi=3, n_strikes=50,                 n_integral=1, moneyness_switch_lo=-1, moneyness_switch_hi=1):
+        super().__init__(beta=beta, vov=vov, rho=rho,                         ATM=ATM, sigma_0=sigma_0, f=f, T_expiry=T_expiry,                         vol_type='N', marking_mode=marking_mode,                         moneyness_lo=moneyness_lo, moneyness_hi=moneyness_hi,                         n_strikes=n_strikes, n_integral=n_integral,                         moneyness_switch_lo=moneyness_switch_lo,                         moneyness_switch_hi=moneyness_switch_hi)
+        
+    def smile_func(self, K):
+        """Hagan normal smile approximation around ATM for beta = 0 as written in the
+        original 'Managing Smile Risk' paper (A.70a)
+        K: strike
+        """
+        b_0 = self.sigma_0_effective(K)
+        log_moneyness = np.log(self.f/K)
+        f_avg = np.sqrt(self.f*K)
+        zeta = self.vov/b_0*f_avg*log_moneyness
+        q_zeta = 1-2*self.rho*zeta+zeta**2
+        x_zeta = np.log((np.sqrt(q_zeta)-self.rho+zeta)/(1-self.rho))
+            
+        return b_0*zeta/x_zeta*    (1+((2-3*self.rho**2)/24*self.vov**2)*self.T_expiry)
 
