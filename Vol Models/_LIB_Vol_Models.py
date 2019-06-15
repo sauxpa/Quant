@@ -736,22 +736,30 @@ class SABR_Goes_Normal(SABR_base_model):
         if np.log(self.f/K) > self._moneyness_switch_lo        and np.log(self.f/K) < self._moneyness_switch_hi:
             return self.IV.price_from_vol(self.smile_func(K), self.f, K, self.T_expiry,                                          payoff=payoff)
         else:
-            X_0 = self.f-K
-            intrinsic_value = max(X_0, 0)
+            if payoff == "Call":
+                return self.call_price(K)
+            elif payoff == "Put":
+                return self.call_pric(K) + (K-self.f)
+            
+    def call_price(self, K):
+        """Returns the call price approximation derived from normal SABR
+        """
+        X_0 = self.f-K
+        intrinsic_value = max(X_0, 0)
 
-            s = 0
-            time_steps = [t*self.step_integral for t in range(self.n_integral)]
+        s = 0
+        time_steps = [t*self.step_integral for t in range(self.n_integral)]
 
-            for t in time_steps:
-                t_next = t + self.step_integral
-                t_mid = 0.5*(t+t_next)
+        for t in time_steps:
+            t_next = t + self.step_integral
+            t_mid = 0.5*(t+t_next)
 
-                f = partial( self.integrand, K, t_mid )
-                L = X_0 - quad(f, -np.inf, np.inf, limit=10)[0]
+            f = partial( self.integrand, K, t_mid )
+            L = X_0 - quad(f, -np.inf, np.inf, limit=10)[0]
 
-                s += self.local_time(t_mid, -L, K=K)*self.step_integral
+            s += self.local_time(t_mid, -L, K=K)*self.step_integral
 
-            return intrinsic_value+0.5*self.sigma_0_effective(K)**2*s
+        return intrinsic_value+0.5*self.sigma_0_effective(K)**2*s
 
     @abc.abstractmethod
     def smile_func(self, K):
