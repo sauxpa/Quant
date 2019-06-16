@@ -1082,6 +1082,7 @@ class Lognormal_multifractal():
         return self._x0
     @x0.setter
     def x0(self, new_x0):
+        self.omega_simulate.cache_clear()
         self._x0 = new_x0
         
     @property
@@ -1089,6 +1090,7 @@ class Lognormal_multifractal():
         return self._T
     @T.setter
     def T(self, new_T):
+        self.omega_simulate.cache_clear()
         self._T = new_T
         
     @property
@@ -1096,6 +1098,7 @@ class Lognormal_multifractal():
         return self._scheme_step
     @scheme_step.setter
     def scheme_step(self, new_scheme_step):
+        self.omega_simulate.cache_clear()
         self.scheme_step = new_scheme_step
     
     @property
@@ -1103,6 +1106,7 @@ class Lognormal_multifractal():
         return self._intermittency
     @intermittency.setter
     def intermittency(self, new_intermittency):
+        self.omega_simulate.cache_clear()
         self._intermittency = new_intermittency
     
     @property
@@ -1110,6 +1114,7 @@ class Lognormal_multifractal():
         return self._integral_scale
     @integral_scale.setter
     def integral_scale(self, new_integral_scale):
+        self.omega_simulate.cache_clear()
         self._integral_scale = new_integral_scale
     
     @property
@@ -1117,6 +1122,7 @@ class Lognormal_multifractal():
         return self._l
     @l.setter
     def l(self, new_l):
+        self.omega_simulate.cache_clear()
         self._l = new_l
         
     @property
@@ -1168,7 +1174,7 @@ class Lognormal_multifractal():
     def simulate(self):
         """Multifractal Random Walk
         """
-        last_step = self.x0
+        last_step = self.x0 
         x = [last_step]
         last_brownian = self.x0
         BM = [last_brownian]
