@@ -835,26 +835,18 @@ class SABR_tanh_base_model(Vol_model):
     dX_t = s_t*C(X_t)*dW_t
     ds_t = vov*s_t*dB_t
     d<W,B>_t = rho*dt
-    C(x) = tanh((x+shift)/l)
+    C(x) = tanh(x/l)
     """
-    def __init__(self, shift=0, l=1, vov=1, rho=0,                 sigma_0=None, f=None, T_expiry=1,                 vol_type=None,                 moneyness_lo=-3, moneyness_hi=3, n_strikes=50):
+    def __init__(self, l=1, vov=1, rho=0,                 sigma_0=None, f=None, T_expiry=1,                 vol_type=None,                 moneyness_lo=-3, moneyness_hi=3, n_strikes=50):
         """Implementation of SABR implied vol and approximated price formula.
-        shift, l, vov and rho are marked.
+        l, vov and rho are marked.
         """
         super().__init__(f=f, T_expiry=T_expiry, vol_type=vol_type,                              moneyness_lo=moneyness_lo, moneyness_hi=moneyness_hi,                              n_strikes=n_strikes)
-        self._shift = float(shift)
         self._l = float(l)
         self._vov = float(vov)
         self._rho = float(rho)
         self._sigma_0 = float(sigma_0)
 
-    @property
-    def shift(self):
-        return self._shift
-    @shift.setter
-    def shift(self, new_shift):
-        self._shift = float(new_shift)
-    
     @property
     def l(self):
         return self._l
@@ -902,12 +894,12 @@ class SABR_tanh_base_model(Vol_model):
     def label(self):
         """Used to decorate plot
         """
-        return r'$\beta$={:.2}, vov={:.0%}, $\rho$={:.0%}, ATM={:.2%}, f={:.2%}, $\sigma_0$={:.2%}'        .format(self.beta, self.vov, self.rho, self.ATM, self.f, self.sigma_0)
+        return r'l={:.2}, vov={:.0%}, $\rho$={:.0%}, ATM={:.2%}, f={:.2%}, $\sigma_0$={:.2%}'        .format(self.l, self.vov, self.rho, self.ATM, self.f, self.sigma_0)
     
     def local_vol_inv_int(self, x):
         """Closed form for the primitive of 1/(tanh((x+s)/l))
         """
-        return self.l*np.log(np.sinh((self.shift + x)/self.l))
+        return self.l*np.log(np.sinh(x/self.l))
     
     @abc.abstractmethod
     def smile_func(self, K):
@@ -920,12 +912,12 @@ class SABR_tanh_base_model(Vol_model):
 class SABR_tanh_LN(SABR_tanh_base_model):
     """SABR_tanh model using lognormal implied vol quoting
     """
-    def __init__(self, shift=0, l=1, vov=1, rho=0,                 sigma_0=None, f=None, T_expiry=1,                 moneyness_lo=-3, moneyness_hi=3, n_strikes=50):
-        super().__init__(shift=shift, l=l, vov=vov, rho=rho,                         sigma_0=sigma_0, f=f, T_expiry=T_expiry,                         vol_type='LN',                         moneyness_lo=moneyness_lo, moneyness_hi=moneyness_hi,                         n_strikes=n_strikes)
+    def __init__(self, l=1, vov=1, rho=0,                 sigma_0=None, f=None, T_expiry=1,                 moneyness_lo=-3, moneyness_hi=3, n_strikes=50):
+        super().__init__(l=l, vov=vov, rho=rho,                         sigma_0=sigma_0, f=f, T_expiry=T_expiry,                         vol_type='LN',                         moneyness_lo=moneyness_lo, moneyness_hi=moneyness_hi,                         n_strikes=n_strikes)
     
     @property
     def ATM_LN(self):
-        f_adj = (self.f+self.shift)/self.l
+        f_adj = self.f/self.l
         C_f_adj = np.tanh(f_adj)
         gamma_1 = 1/(self.l*np.cosh(f_adj)**2)/C_f_adj
         gamma_2 = -2/(self.l**2*np.cosh(f_adj)**2)
@@ -945,7 +937,7 @@ class SABR_tanh_LN(SABR_tanh_base_model):
         else:
             log_moneyness = np.log(self.f/K)
             f_avg = np.sqrt(self.f*K)
-            f_avg_adj = (f_avg+self.shift)/self.l
+            f_avg_adj = f_avg/self.l
             C_f_avg_adj = np.tanh(f_avg_adj)
             gamma_1 = 1/(self.l*np.cosh(f_avg_adj)**2)/C_f_avg_adj
             gamma_2 = -2/(self.l**2*np.cosh(f_avg_adj)**2)
@@ -962,12 +954,12 @@ class SABR_tanh_LN(SABR_tanh_base_model):
 class SABR_tanh_N(SABR_tanh_base_model):
     """SABR_tanh model using lognormal implied vol quoting
     """
-    def __init__(self, shift=0, l=1, vov=1, rho=0,                 sigma_0=None, f=None, T_expiry=1,                 moneyness_lo=-3, moneyness_hi=3, n_strikes=50):
-        super().__init__(shift=shift, l=l, vov=vov, rho=rho,                         sigma_0=sigma_0, f=f, T_expiry=T_expiry,                         vol_type='N',                         moneyness_lo=moneyness_lo, moneyness_hi=moneyness_hi,                         n_strikes=n_strikes)
+    def __init__(self, l=1, vov=1, rho=0,                 sigma_0=None, f=None, T_expiry=1,                 moneyness_lo=-3, moneyness_hi=3, n_strikes=50):
+        super().__init__(l=l, vov=vov, rho=rho,                         sigma_0=sigma_0, f=f, T_expiry=T_expiry,                         vol_type='N',                         moneyness_lo=moneyness_lo, moneyness_hi=moneyness_hi,                         n_strikes=n_strikes)
     
     @property
     def ATM_N(self):
-        f_adj = (self.f+self.shift)/self.l
+        f_adj = self.f/self.l
         C_f_adj = np.tanh(f_adj)
         gamma_1 = 1/(self.l*np.cosh(f_adj)**2)/C_f_adj
         gamma_2 = -2/(self.l**2*np.cosh(f_adj)**2)
@@ -987,7 +979,7 @@ class SABR_tanh_N(SABR_tanh_base_model):
         else:
             log_moneyness = np.log(self.f/K)
             f_avg = np.sqrt(self.f*K)
-            f_avg_adj = (f_avg+self.shift)/self.l
+            f_avg_adj = f_avg/self.l
             C_f_avg_adj = np.tanh(f_avg_adj)
             gamma_1 = 1/(self.l*np.cosh(f_avg_adj)**2)/C_f_avg_adj
             gamma_2 = -2/(self.l**2*np.cosh(f_avg_adj)**2)
