@@ -112,7 +112,7 @@ class Ito_diffusion_1d(Ito_diffusion):
     def simulate(self):
         """Euler-Maruyama scheme
         """
-        last_step = self._x0
+        last_step = self.x0
         x = [last_step]
         for t in self.time_steps[1:]:
             # z drawn for a N(0,1)
@@ -419,7 +419,7 @@ class Pinned_diffusion(Ito_diffusion_1d):
         
         if show_backbone:
             # discretization scheme to estimate the backbone
-            last_step = self._x0
+            last_step = self.x0
             backbone = [last_step]
             for t in self.time_steps[1:]:
                 last_step += self._h(t) * (self.pin-last_step) * self.scheme_step
@@ -526,7 +526,7 @@ class Ito_diffusion_multi_d(Ito_diffusion):
     def simulate(self):
         """Euler-Maruyama scheme
         """
-        last_step = self._x0
+        last_step = self.x0
         x = [last_step]
         for t in self.time_steps[1:]:
             # z drawn for a N(0_d,1_d)
@@ -993,7 +993,7 @@ class Pinned_diffusion_sheaf(Ito_diffusion_sheaf):
         
         if show_backbone:
             # discretization scheme to estimate the backbone
-            last_step = self._x0
+            last_step = self.x0
             backbone = [last_step]
             for t in self.time_steps[1:]:
                 last_step += self._h(t) * (self.pin-last_step) * self.scheme_step
@@ -1168,146 +1168,7 @@ class Lognormal_multifractal():
     def simulate(self):
         """Multifractal Random Walk
         """
-        last_step = 0
-        x = [last_step]
-        last_brownian = 0
-        BM = [last_brownian]
-        omega = self.omega_simulate()
-        for om in omega:
-            noise = rd.randn() * self.l_sqrt
-            last_step += np.exp(om) * noise
-            x.append(last_step)
-            last_brownian += noise
-            BM.append(last_brownian) 
-        
-        df = pd.DataFrame({'MRW': x, 'BM': BM})
-        df.index = self.time_steps
-        return df
-
-
-# In[28]:
-
-
-class Lognormal_multifractal():
-    """Simulate a lognormal multifractal cascade process
-    X_t = lim_{l->0+} int_0^t exp(w_l,T(u))dW_u
-    where w_l,T(u) is a gaussian process with known mean and covariance functions.
-    This is approximated by discretization of dX_t = exp(w_l,T(t))dW_t for a small
-    value of l.
-    """
-    def __init__(self, x0=0, T=1, scheme_step=0.01,                 intermittency=0.01, integral_scale=1, l=None):
-        self._x0 = np.float(x0)
-        self._T = np.float(T)
-        self._scheme_step = np.float(scheme_step)
-        self._intermittency = np.float(intermittency)
-        self._integral_scale = np.float(integral_scale)
-        
-        if not l:
-            l = self._scheme_step / 128
-        self._l = l
-        
-    @property
-    def x0(self):
-        return self._x0
-    @x0.setter
-    def x0(self, new_x0):
-        self.omega_simulate.cache_clear()
-        self._x0 = new_x0
-        
-    @property
-    def T(self):
-        return self._T
-    @T.setter
-    def T(self, new_T):
-        self.omega_simulate.cache_clear()
-        self._T = new_T
-        
-    @property
-    def scheme_step(self):
-        return self._scheme_step
-    @scheme_step.setter
-    def scheme_step(self, new_scheme_step):
-        self.omega_simulate.cache_clear()
-        self.scheme_step = new_scheme_step
-    
-    @property
-    def intermittency(self):
-        return self._intermittency
-    @intermittency.setter
-    def intermittency(self, new_intermittency):
-        self.omega_simulate.cache_clear()
-        self._intermittency = new_intermittency
-    
-    @property
-    def integral_scale(self):
-        return self._integral_scale
-    @integral_scale.setter
-    def integral_scale(self, new_integral_scale):
-        self.omega_simulate.cache_clear()
-        self._integral_scale = new_integral_scale
-    
-    @property
-    def l(self):
-        return self._l
-    @l.setter
-    def l(self, new_l):
-        self.omega_simulate.cache_clear()
-        self._l = new_l
-        
-    @property
-    def l_sqrt(self):
-        return np.sqrt(self.l)
-    
-    @property
-    def time_steps(self):
-        return [ step*self.l for step in range(self.scheme_steps+1) ] 
-    
-    @property
-    def scheme_steps(self):
-        return np.floor(self.T / self.l).astype('int')
-    
-    def expectation(self):
-        return -self.intermittency**2 * (np.log(self.integral_scale / self.l) - 1)
-
-    def covariance(self, tau):
-        if self.integral_scale <= tau:
-            return 0
-        elif tau < self.integral_scale and tau >= self.l:
-            return self.intermittency ** 2 * np.log(self.integral_scale / tau)
-        else:
-            return self.intermittency ** 2 * (np.log(self.integral_scale / self.l)                                               + 1 - tau / self.l)
-
-    def covariance_matrix(self):
-        cov = np.zeros((self.scheme_steps, self.scheme_steps))
-        for i in range(self.scheme_steps):
-            cov[i][i] = self.covariance(0)
-            for j in range(i):
-                cov[i][j] = self.covariance((i - j) * self._scheme_step)
-                cov[j][i] = cov[i][j]
-        return cov
-    
-    @lru_cache(maxsize=None)
-    def omega_simulate(self):
-        """Simulate the gaussian process omega.
-        Samples are cached, with cache resete whenever parameters are modified
-        (T, integral scale, tau...)
-        """
-        return rd.multivariate_normal(self.expectation() * np.ones((self.scheme_steps,)),                                      self.covariance_matrix())
-        
-    def MRM(self):
-        """Multifractal Random Measure
-        """
-        last_step = 0
-        x = [last_step]
-        omega = self.omega_simulate()
-        for n in range(1, self.scheme_steps):
-            last_step += self.l * np.exp(2 * omega[n - 1])
-            x.append(last_step)
-            
-    def simulate(self):
-        """Multifractal Random Walk
-        """
-        last_step = 0
+        last_step = self.x0
         x = [last_step]
         last_brownian = 0
         BM = [last_brownian]
