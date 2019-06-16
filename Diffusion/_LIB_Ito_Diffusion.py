@@ -1170,7 +1170,7 @@ class Lognormal_multifractal():
         """
         last_step = self.x0
         x = [last_step]
-        last_brownian = 0
+        last_brownian = self.x0
         BM = [last_brownian]
         omega = self.omega_simulate()
         for om in omega:
