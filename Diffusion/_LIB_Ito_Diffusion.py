@@ -673,6 +673,67 @@ class SABR(Ito_diffusion_multi_d):
         return np.array([[x[1]*(x[0])**self.beta, 0],                         [self.vov*x[1]*self.rho, self.vov*x[1]*self.rho_dual]])
 
 
+# In[17]:
+
+
+class SABR_tanh(Ito_diffusion_multi_d):
+    """Instantiate Ito_diffusion to simulate a modified SABR with tanh local vol model
+    dX_t = s_t*C(X_t)*dW_t
+    ds_t = vov*s_t*dB_t
+    d<W,B>_t = rho*dt
+    C(x) = tanh((x+shift)/l)
+    where shift, l, vov, rho are real numbers
+    """
+    def __init__(self, x0=[1,1], T=1, scheme_steps=100, keys=None,                 shift=0, l=1, vov=1, rho=0,                 barrier=np.full(1, None), barrier_condition=np.full(1, None)): 
+        self._shift = np.float(shift)
+        self._l = np.float(l)
+        self._vov = np.float(vov)
+        self._rho = np.float(rho)
+        n_factors = 2
+        super().__init__(x0=x0, T=T, scheme_steps=scheme_steps, n_factors=n_factors, keys=keys,                        barrier=barrier, barrier_condition=barrier_condition)
+        
+    @property
+    def shift(self):
+        return self._shift
+    @shift.setter
+    def shift(self, new_shift):
+        self._shift = float(new_shift)
+    
+    @property
+    def l(self):
+        return self._l
+    @l.setter
+    def l(self, new_l):
+        self._l = float(new_l)
+        
+    @property
+    def rho(self):
+        return self._rho
+    @rho.setter
+    def rho(self, new_rho):
+        self._rho = new_rho
+     
+    @property
+    def vov(self):
+        return self._vov
+    @vov.setter
+    def vov(self, new_vov):
+        self._vov = new_vov
+    
+    @property
+    def rho_dual(self):
+        return np.sqrt(1-self.rho**2)
+        
+    def drift(self, t, x):
+        return np.zeros_like(x)
+    
+    def vol(self, t, x):
+        """Project dB onto dW and an orhtogonal white noise dZ
+        dB_t = rho*dW_t + sqrt(1-rho^2)*dZ_t
+        """
+        return np.array([[x[1]*np.tanh((x[0]+self.shift)/self.l), 0],                         [self.vov*x[1]*self.rho, self.vov*x[1]*self.rho_dual]])
+
+
 # ## Diffusion sheaf
 # This is an attempt to create a sheaf of diffusion paths. Loosely speaking, from a given realization of a diffusion, the aim is to create a sequence of paths that share the same statistical properties as the original path while being "continous deformations" of it. That can be achieved by using "similar" gaussian increments at a given time during the discretization scheme for each path.
 # 
@@ -680,7 +741,7 @@ class SABR(Ito_diffusion_multi_d):
 # 
 # Note that this is indeed equivalent to sampling diffusion paths driven by Brownian motions with correlation $\alpha$ with the original process.
 
-# In[17]:
+# In[18]:
 
 
 class Ito_diffusion_sheaf(Ito_diffusion):
@@ -728,7 +789,7 @@ class Ito_diffusion_sheaf(Ito_diffusion):
         return df
 
 
-# In[18]:
+# In[19]:
 
 
 class BM_sheaf(Ito_diffusion_sheaf):
@@ -748,7 +809,7 @@ class BM_sheaf(Ito_diffusion_sheaf):
         return self._vol_double
 
 
-# In[19]:
+# In[20]:
 
 
 class GBM_sheaf(Ito_diffusion_sheaf):
@@ -768,7 +829,7 @@ class GBM_sheaf(Ito_diffusion_sheaf):
         return self._vol_double * x
 
 
-# In[20]:
+# In[21]:
 
 
 class Vasicek_sheaf(Ito_diffusion_sheaf):
@@ -810,7 +871,7 @@ class Vasicek_sheaf(Ito_diffusion_sheaf):
         return self.vol_double
 
 
-# In[21]:
+# In[22]:
 
 
 class CIR_sheaf(Ito_diffusion_sheaf):
@@ -858,7 +919,7 @@ class CIR_sheaf(Ito_diffusion_sheaf):
         return self.vol_double * np.sqrt(x)
 
 
-# In[22]:
+# In[23]:
 
 
 class pseudo_GBM_sheaf(Ito_diffusion_sheaf):
@@ -892,7 +953,7 @@ class pseudo_GBM_sheaf(Ito_diffusion_sheaf):
         return self.vol_double*x
 
 
-# In[23]:
+# In[24]:
 
 
 class Pinned_diffusion_sheaf(Ito_diffusion_sheaf):
@@ -942,7 +1003,7 @@ class Pinned_diffusion_sheaf(Ito_diffusion_sheaf):
         return df
 
 
-# In[24]:
+# In[25]:
 
 
 class Alpha_pinned_BM_sheaf(Pinned_diffusion_sheaf):
@@ -965,7 +1026,7 @@ class Alpha_pinned_BM_sheaf(Pinned_diffusion_sheaf):
         return self._vol_double
 
 
-# In[25]:
+# In[26]:
 
 
 class F_pinned_BM_sheaf(Pinned_diffusion_sheaf):
@@ -995,7 +1056,7 @@ class F_pinned_BM_sheaf(Pinned_diffusion_sheaf):
 
 # ## Multifractal diffusions
 
-# In[26]:
+# In[27]:
 
 
 class Lognormal_multifractal():
@@ -1124,7 +1185,7 @@ class Lognormal_multifractal():
         return df
 
 
-# In[27]:
+# In[28]:
 
 
 class Lognormal_multifractal():
