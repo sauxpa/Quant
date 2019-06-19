@@ -5,11 +5,13 @@
 
 
 from ito_diffusion import *
+from noise import *
 import numpy as np
 from numpy import random as rd
 import pandas as pd
 import abc
 from functools import lru_cache
+from collections import defaultdict
 
 
 # ## 1d diffusions
@@ -18,19 +20,27 @@ from functools import lru_cache
 
 
 class Ito_diffusion_1d(Ito_diffusion):
-    def __init__(self, x0=0, T=1, scheme_steps=100, barrier=None, barrier_condition=None):
-        super().__init__(x0=x0, T=T, scheme_steps=scheme_steps,                         barrier=barrier, barrier_condition=barrier_condition)
+    def __init__(self, x0=0, T=1, scheme_steps=100, barrier=None, barrier_condition=None,                 noise_params=defaultdict(int)):
+        super().__init__(x0=x0, T=T, scheme_steps=scheme_steps,                         barrier=barrier, barrier_condition=barrier_condition,                         noise_params=noise_params)
     
     def simulate(self):
         """Euler-Maruyama scheme
         """
         last_step = self.x0
         x = [last_step]
-        for t in self.time_steps[1:]:
-            # z drawn for a N(0,1)
-            z = rd.randn()
+        
+        if self.noise_type == 'fgaussian':
+            noises = Fractional_Gaussian_Noise(T=self.T, scheme_steps=self.scheme_steps,                                               H=self.noise_params['H']).simulate()
+        
+        for i, t in enumerate(self.time_steps[1:]):
+            # for regular gaussian noise, generate them sequentially
+            if self.noise_type == 'gaussian':
+                z = self.scheme_step_sqrt * rd.randn()
+            else:
+                z = noises[i]
+                
             previous_step = last_step
-            last_step += self.drift(t, last_step) * self.scheme_step             + self.vol(t, last_step) * self.scheme_step_sqrt * z
+            last_step += self.drift(t, last_step) * self.scheme_step             + self.vol(t, last_step) * z
             
             if self.barrier_condition == 'absorb'            and self.barrier != None            and self.barrier_crossed(previous_step, last_step, self.barrier):
                 last_step = self.barrier
@@ -50,8 +60,8 @@ class BM(Ito_diffusion_1d):
     dX_t = drift*dt + vol*dW_t
     where drift and vol are real numbers
     """
-    def __init__(self, x0=0, T=1, scheme_steps=100, drift=0, vol=1,                 barrier=None, barrier_condition=None):
-        super().__init__(x0=x0, T=T, scheme_steps=scheme_steps,                        barrier=barrier, barrier_condition=barrier_condition)
+    def __init__(self, x0=0, T=1, scheme_steps=100, drift=0, vol=1,                 barrier=None, barrier_condition=None,                 noise_params=defaultdict(int)):
+        super().__init__(x0=x0, T=T, scheme_steps=scheme_steps,                        barrier=barrier, barrier_condition=barrier_condition,                        noise_params=noise_params)
         self._drift_double = np.float(drift)
         self._vol_double = np.float(vol)
     
@@ -84,8 +94,8 @@ class GBM(Ito_diffusion_1d):
     dX_t = drift*X_t*dt + vol*X_t*dW_t
     where drift and vol are real numbers
     """
-    def __init__(self, x0=1, T=1, scheme_steps=100, drift=0, vol=1,                 barrier=None, barrier_condition=None):
-        super().__init__(x0, T, scheme_steps,                         barrier=barrier, barrier_condition=barrier_condition)
+    def __init__(self, x0=1, T=1, scheme_steps=100, drift=0, vol=1,                 barrier=None, barrier_condition=None,                 noise_params=defaultdict(int)):
+        super().__init__(x0, T, scheme_steps,                         barrier=barrier, barrier_condition=barrier_condition,                         noise_params=noise_params)
         self._drift_double = np.float(drift)
         self._vol_double = np.float(vol)
     
@@ -118,8 +128,10 @@ class SLN(Ito_diffusion_1d):
     dX_t = drift*X_t*dt + sigma*(shift*X_t+(mixing-shift)*X_0+(1-m)*L)*dW_t
     where drift and vol are real numbers
     """
-    def __init__(self, x0=1, T=1, scheme_steps=100,                 drift=0, sigma=0, shift=0, mixing=0, L=0,                 barrier=None, barrier_condition=None):
-        super().__init__(x0, T, scheme_steps,                         barrier=barrier, barrier_condition=barrier_condition)
+    def __init__(self, x0=1, T=1, scheme_steps=100,                 drift=0, sigma=0, shift=0, mixing=0, L=0,                 barrier=None, barrier_condition=None,
+                 noise_params=defaultdict(int)):
+        super().__init__(x0, T, scheme_steps,                         barrier=barrier, barrier_condition=barrier_condition,
+                         noise_params=noise_params)
         self._drift_double = drift
         self._sigma = sigma
         self._shift = shift
@@ -176,8 +188,8 @@ class Vasicek(Ito_diffusion_1d):
     dX_t = mean_reversion*(long_term-X_t)*dt + vol*dW_t
     where mean_reversion, long_term and vol are real numbers
     """
-    def __init__(self, x0=1, T=1, scheme_steps=100, mean_reversion=1, long_term=0, vol=1,                barrier=None, barrier_condition=None):
-        super().__init__(x0, T, scheme_steps,                         barrier=barrier, barrier_condition=barrier_condition)
+    def __init__(self, x0=1, T=1, scheme_steps=100, mean_reversion=1, long_term=0, vol=1,                barrier=None, barrier_condition=None,                noise_params=defaultdict(int)):
+        super().__init__(x0, T, scheme_steps,                         barrier=barrier, barrier_condition=barrier_condition,                         noise_params=noise_params)
         self._mean_reversion = np.float(mean_reversion)
         self._long_term = np.float(long_term)
         self._vol_double = np.float(vol)
@@ -218,8 +230,8 @@ class CIR(Ito_diffusion_1d):
     dX_t = mean_reversion*(long_term-X_t)*dt + vol*sqrt(X_t)*dW_t
     where mean_reversion, long_term and vol are real numbers
     """
-    def __init__(self, x0=1, T=1, scheme_steps=100, mean_reversion=1, long_term=0, vol=1,                barrier=None, barrier_condition=None):
-        super().__init__(x0, T, scheme_steps,                         barrier=barrier, barrier_condition=barrier_condition)
+    def __init__(self, x0=1, T=1, scheme_steps=100, mean_reversion=1, long_term=0, vol=1,                barrier=None, barrier_condition=None,                noise_params=defaultdict(int)):
+        super().__init__(x0, T, scheme_steps,                         barrier=barrier, barrier_condition=barrier_condition,                         noise_params=noise_params)
         self._mean_reversion = np.float(mean_reversion)
         self._long_term = np.float(long_term)
         self._vol_double = np.float(vol)
@@ -266,8 +278,8 @@ class pseudo_GBM(Ito_diffusion_1d):
     dX_t = drift*dt + vol*X_t*dW_t
     where r and vol are real numbers
     """
-    def __init__(self, x0=1, T=1, scheme_steps=100, drift=0, vol=1,                barrier=None, barrier_condition=None):
-        super().__init__(x0, T, scheme_steps,                         barrier=barrier, barrier_condition=barrier_condition)
+    def __init__(self, x0=1, T=1, scheme_steps=100, drift=0, vol=1,                barrier=None, barrier_condition=None,                noise_params=defaultdict(int)):
+        super().__init__(x0, T, scheme_steps,                         barrier=barrier, barrier_condition=barrier_condition,                         noise_params=noise_params)
         self._drift_double = np.float(drift)
         self._vol_double = np.float(vol)
     
@@ -299,8 +311,8 @@ class Pinned_diffusion(Ito_diffusion_1d):
     """Generic class for pinned diffusions, i.e diffusions which are constrained to arrive
     at a given point at the terminal date.
     """
-    def __init__(self, x0=0, T=1, scheme_steps=100, alpha=1, vol=1, pin=0):
-        super().__init__(x0=x0, T=T, scheme_steps=scheme_steps)
+    def __init__(self, x0=0, T=1, scheme_steps=100, alpha=1, vol=1, pin=0,                 noise_params=defaultdict(int)):
+        super().__init__(x0=x0, T=T, scheme_steps=scheme_steps,                         noise_params=noise_params)
         self._pin = np.float(pin)
     
     @property
@@ -349,8 +361,8 @@ class Alpha_pinned_BM(Pinned_diffusion):
     dX_t = alpha*(y-X_t)/(T-t)*dt + vol*dW_t
     where alpha, y (pin) and vol are real numbers
     """
-    def __init__(self, x0=0, T=1, scheme_steps=100, alpha=1, vol=1, pin=0):
-        super().__init__(x0=x0, T=T, scheme_steps=scheme_steps, pin=pin)
+    def __init__(self, x0=0, T=1, scheme_steps=100, alpha=1, vol=1, pin=0,                 noise_params=defaultdict(int)):
+        super().__init__(x0=x0, T=T, scheme_steps=scheme_steps, pin=pin,                         noise_params=noise_params)
         self._alpha = np.float(alpha)
         self._vol_double = np.float(vol)
     
@@ -387,8 +399,8 @@ class F_pinned_BM(Pinned_diffusion):
     where y (pin) is a real number, f and F respectively the pdf and cdf
     of a probability distribution over [0,T]
     """
-    def __init__(self, x0=0, T=1, scheme_steps=100, distr=None, pin=0):
-        super().__init__(x0=x0, T=T, scheme_steps=scheme_steps, pin=pin)
+    def __init__(self, x0=0, T=1, scheme_steps=100, distr=None, pin=0,                 noise_params=defaultdict(int)):
+        super().__init__(x0=x0, T=T, scheme_steps=scheme_steps, pin=pin,                         noise_params=noise_params)
         if not distr:
             raise NameError( "Must specify a probability distribution" )
         else:
@@ -406,9 +418,40 @@ class F_pinned_BM(Pinned_diffusion):
         return np.sqrt(self._f(t))
 
 
-# ## Multifractal diffusions
+# ## Fractional Brownian Motion
 
 # In[12]:
+
+
+class FBM(BM):
+    """Instantiate Ito_diffusion to simulate a drifted fractional Brownian motion
+    dX_t = drift*dt + vol*dW^H_t,
+    H: Hurst parameter
+    where drift, vol are real numbers
+    """
+    def __init__(self, x0=0, T=1, scheme_steps=100, drift=0, vol=1, H=0.5,                 barrier=None, barrier_condition=None):
+        super().__init__(x0=x0, T=T, scheme_steps=scheme_steps,                        barrier=barrier, barrier_condition=barrier_condition)
+        self._H = H
+        self.noise_params = {
+            'type': 'fgaussian',
+            'H' : self._H,
+        }
+        
+    @property
+    def H(self):
+        return self._H
+    @H.setter
+    def H(self, new_H):
+        self.noise_params = {
+            'type': 'fgaussian',
+            'H' : new_H,
+        }
+        self._H = new_H
+
+
+# ## Multifractal diffusions
+
+# In[13]:
 
 
 class Lognormal_multifractal():

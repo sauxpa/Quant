@@ -6,10 +6,13 @@
 
 import numpy as np
 import abc
+from collections import defaultdict
 
 
 # ## Generic Ito diffusion
-# 𝑑𝑋𝑡=𝑏(𝑡,𝑋𝑡)𝑑𝑡+𝜎(𝑡,𝑋𝑡)𝑑𝑊𝑡
+# 𝑑𝑋𝑡=𝑏(𝑡,𝑋𝑡)𝑑𝑡+𝜎(𝑡,𝑋𝑡)𝑑𝑊𝑡.
+# 
+# Supports standard gaussian noise and fractional gaussian noise.
 
 # In[2]:
 
@@ -21,12 +24,13 @@ class Ito_diffusion(abc.ABC):
     Typical example : barrier=0, barrier_condition='absorb'
     (only this one is supported for now)
     """
-    def __init__(self, x0=0, T=1, scheme_steps=100,                 barrier=None, barrier_condition=None):
+    def __init__(self, x0=0, T=1, scheme_steps=100,                 barrier=None, barrier_condition=None,                 noise_params=defaultdict(int)):
         self._x0 = x0
         self._T = T
         self._scheme_steps = scheme_steps
         self._barrier = barrier
         self._barrier_condition = barrier_condition
+        self._noise_params = noise_params
         
     @property
     def x0(self):
@@ -54,7 +58,7 @@ class Ito_diffusion(abc.ABC):
         return self._barrier
     @barrier.setter
     def barrier(self, new_barrier):
-        self._barrier = barrier
+        self._barrier = new_barrier
     
     @property
     def barrier_condition(self):
@@ -66,6 +70,21 @@ class Ito_diffusion(abc.ABC):
     def barrier_condition(self, new_barrier_condition):
         self._barrier_condition = barrier_condition
         
+    @property
+    def noise_params(self):
+        return self._noise_params
+    @noise_params.setter
+    def noise_params(self, new_noise_params):
+        self._noise_params = new_noise_params
+        
+    @property
+    def noise_type(self):
+        noise_type = self.noise_params['type']
+        if noise_type:
+            return noise_type
+        else:
+            return 'gaussian'
+    
     @property
     def scheme_step(self):
         return self.T/self.scheme_steps
