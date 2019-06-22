@@ -10,6 +10,7 @@ from scipy.stats import norm
 from scipy.misc import derivative
 from scipy.optimize import brentq
 from scipy.integrate import quad
+from scipy.special import erfi
 from functools import partial
 from functools import lru_cache
 from ito_diffusion_multi_d import SABR
@@ -119,6 +120,9 @@ class Vol_model(abc.ABC):
         # normal or Lognormal implied vol
         self._vol_type = vol_type
         
+    def __str__(self):
+        return 'Generic vol model'
+        
     @property
     def f(self):
         return self._f
@@ -132,11 +136,6 @@ class Vol_model(abc.ABC):
     @T_expiry.setter
     def T_expiry(self, new_T_expiry):
         self._T_expiry = new_T_expiry
-        
-    @property
-    @abc.abstractmethod
-    def label(self):
-        pass
     
     @property
     @abc.abstractmethod
@@ -242,16 +241,14 @@ class Vol_model(abc.ABC):
         if curve_type == 'smile':
             values = self.smile.values()
             ylabel = 'implied vol'
-            label = self.label
         elif curve_type == 'pdf':
             values = self.pdf_curve.values()
             ylabel = 'pdf'
-            label = self.label + r', expiry={}y'.format(self.T_expiry)
         else:
             raise NameError( "Unsupported curve type : {}".format(curve_type) )
         
         fig, ax = plt.subplots(figsize=(29, 21), nrows=1, ncols=1)
-        ax.plot(x_grid, values, label=label)
+        ax.plot(x_grid, values, label=self.__str___())
         ax.set_xlabel(xlabel, fontsize=font_size)
         ax.set_ylabel(ylabel, fontsize=font_size)
         ax.legend(loc='upper right', prop={'size': legend_size})
@@ -291,7 +288,7 @@ class SLN_adjustable_backbone(Vol_model):
         return self._sigma
     @sigma.setter
     def sigma(self, new_sigma):
-        self._sigma = float(new_sigma)
+        self._sigma = new_sigma
     
     @property
     def shift(self):
@@ -314,16 +311,13 @@ class SLN_adjustable_backbone(Vol_model):
     def L(self, new_L):
         self._L = new_L
         
-    @property
-    def label(self):
-        return r'$\sigma$={:.2}, shift={:.0%}, $\mixing$={:.0%}, L={:.2}, f={:.2%}'        .format(self.sigma, self.shift, self.mixing, self.L, self.f)
+    def __str__(self):
+        return r'$\sigma$={:.2f}, shift={:.0%}, $\mixing$={:.0%}, L={:.2f}, f={:.2%}'        .format(self.sigma, self.shift, self.mixing, self.L, self.f)
     
     @abc.abstractmethod
     def smile_func(self, K):
         pass
 
-
-# 
 
 # In[6]:
 
@@ -377,9 +371,9 @@ class SABR_base_model(Vol_model):
         or mark sigma_0 directly.
         """
         super().__init__(f=f, T_expiry=T_expiry, vol_type=vol_type,                              moneyness_lo=moneyness_lo, moneyness_hi=moneyness_hi,                              n_strikes=n_strikes)
-        self._beta = float(beta)
-        self._vov = float(vov)
-        self._rho = float(rho)
+        self._beta = beta
+        self._vov = vov
+        self._rho = rho
         
         # ATM or sigma_0
         self._marking_mode = marking_mode
@@ -392,12 +386,15 @@ class SABR_base_model(Vol_model):
         elif self._marking_mode == 'sigma_0' and self._sigma_0 == None:
             raise NameError( "sigma_0 must be marked in sigma_0 marking mode" )
 
+    def __str__(self):
+        return r'T_expiry={}y, $\beta$={:.2f}, vov={:.2%}, $\rho$={:.2%}, f={:.2%}, $\sigma_0$={:.2%}'    .format(self.T_expiry, self.beta, self.vov, self.rho, self.f, self.sigma_0)   
+            
     @property
     def beta(self):
         return self._beta
     @beta.setter
     def beta(self, new_beta):
-        self._beta = float(new_beta)
+        self._beta = new_beta
     
     @property
     def rho(self):
@@ -412,12 +409,6 @@ class SABR_base_model(Vol_model):
     @vov.setter
     def vov(self, new_vov):
         self._vov = new_vov
-        
-    @property
-    def label(self):
-        """Used to decorate plot
-        """
-        return r'$\beta$={:.2}, vov={:.0%}, $\rho$={:.0%}, ATM={:.2%}, f={:.2%}, $\sigma_0$={:.2%}'        .format(self.beta, self.vov, self.rho, self.ATM, self.f, self.sigma_0)
         
     @property
     def ATM_LN(self):
@@ -510,6 +501,9 @@ class SABR_Hagan_LN(SABR_base_model):
     """
     def __init__(self, beta=1, vov=1, rho=0,                 ATM=None, sigma_0=None, f=None, T_expiry=1,                 marking_mode='ATM',                 moneyness_lo=-3, moneyness_hi=3, n_strikes=50):
         super().__init__(beta=beta, vov=vov, rho=rho,                         ATM=ATM, sigma_0=sigma_0, f=f, T_expiry=T_expiry,                         vol_type='LN', marking_mode=marking_mode,                         moneyness_lo=moneyness_lo, moneyness_hi=moneyness_hi,                         n_strikes=n_strikes)
+    
+    def __str__(self):
+        return r'$T_expiry={}y, \beta$={:.2f}, vov={:.2%}, $\rho$={:.2%}, ATM={:.2%}, f={:.2%}, $\sigma_0$={:.2%}'    .format(self.T_expiry, self.beta, self.vov, self.rho, self.ATM, self.f, self.sigma_0)
         
     def smile_func(self, K):
         """Hagan lognormal smile approximation around ATM as written in the
@@ -537,7 +531,10 @@ class SABR_Hagan_N(SABR_base_model):
     """
     def __init__(self, beta=1, vov=1, rho=0,                 ATM=None, sigma_0=None, f=None, T_expiry=1,                 marking_mode='ATM',                 moneyness_lo=-3, moneyness_hi=3, n_strikes=50):
         super().__init__(beta=beta, vov=vov, rho=rho,                         ATM=ATM, sigma_0=sigma_0, f=f, T_expiry=T_expiry,                         vol_type='N', marking_mode=marking_mode,                         moneyness_lo=moneyness_lo, moneyness_hi=moneyness_hi,                         n_strikes=n_strikes)
-        
+    
+    def __str__(self):
+        return r'T_expiry={}y, $\beta$={:.2f}, vov={:.2%}, $\rho$={:.2%}, ATM={:.2f}bps, f={:.2%}, $\sigma_0$={:.2%}'    .format(self.T_expiry, self.beta, self.vov, self.rho, self.ATM/ONE_BP, self.f, self.sigma_0)  
+    
     def smile_func(self, K):
         """Hagan normal smile approximation around ATM as written in the
         original 'Managing Smile Risk' paper (A.69a)
@@ -842,17 +839,17 @@ class SABR_tanh_base_model(Vol_model):
         l, vov and rho are marked.
         """
         super().__init__(f=f, T_expiry=T_expiry, vol_type=vol_type,                              moneyness_lo=moneyness_lo, moneyness_hi=moneyness_hi,                              n_strikes=n_strikes)
-        self._l = float(l)
-        self._vov = float(vov)
-        self._rho = float(rho)
-        self._sigma_0 = float(sigma_0)
+        self._l = l
+        self._vov = vov
+        self._rho = rho
+        self._sigma_0 = sigma_0
 
     @property
     def l(self):
         return self._l
     @l.setter
     def l(self, new_l):
-        self._l = float(new_l)
+        self._l = new_l
     
     @property
     def rho(self):
@@ -890,11 +887,8 @@ class SABR_tanh_base_model(Vol_model):
         elif self.vol_type == 'LN':
             return self.ATM*self.f
         
-    @property
-    def label(self):
-        """Used to decorate plot
-        """
-        return r'l={:.2}, vov={:.0%}, $\rho$={:.0%}, ATM={:.2%}, f={:.2%}, $\sigma_0$={:.2%}'        .format(self.l, self.vov, self.rho, self.ATM, self.f, self.sigma_0)
+    def __str__(self):
+        return r'l={:.2f}, vov={:.0%}, $\rho$={:.0%}, ATM={:.2%}, f={:.2%}, $\sigma_0$={:.2%}'        .format(self.l, self.vov, self.rho, self.ATM, self.f, self.sigma_0)
     
     def local_vol_inv_int(self, x):
         """Closed form for the primitive of 1/(tanh((x+s)/l))
@@ -983,6 +977,179 @@ class SABR_tanh_N(SABR_tanh_base_model):
             C_f_avg_adj = np.tanh(f_avg_adj)
             gamma_1 = 1/(self.l*np.cosh(f_avg_adj)**2)/C_f_avg_adj
             gamma_2 = -2/(self.l**2*np.cosh(f_avg_adj)**2)
+            denom = self.local_vol_inv_int(self.f)-self.local_vol_inv_int(K)
+            zeta = self.vov/self.sigma_0*(self.f-K)/C_f_avg_adj
+            q_zeta = 1-2*self.rho*zeta+zeta**2
+            x_zeta = np.log((np.sqrt(q_zeta)-self.rho+zeta)/(1-self.rho))
+            return self.sigma_0*(self.f-K)/denom*zeta/x_zeta        *(1          +((2*gamma_2-gamma_1**2)/24*self.sigma_0**2*C_f_avg_adj**2           +0.25*self.rho*self.vov*self.sigma_0*gamma_1*C_f_avg_adj           +(2-3*self.rho**2)/24*self.vov**2)          *self.T_expiry)
+
+
+# In[17]:
+
+
+class SABR_AS_base_model(Vol_model):
+    """Generic class for SABR_tanh model
+    dX_t = s_t*C(X_t)*dW_t
+    ds_t = vov*s_t*dB_t
+    d<W,B>_t = rho*dt
+    C(x) = exp(-c*log(y/K_max)^2)
+    """
+    def __init__(self, K_max=1, c=1, vov=1, rho=0,                 sigma_0=None, f=None, T_expiry=1,                 vol_type=None,                 moneyness_lo=-3, moneyness_hi=3, n_strikes=50):
+        """Implementation of SABR implied vol and approximated price formula.
+        K_max, c, vov and rho are marked.
+        """
+        super().__init__(f=f, T_expiry=T_expiry, vol_type=vol_type,                              moneyness_lo=moneyness_lo, moneyness_hi=moneyness_hi,                              n_strikes=n_strikes)
+        self._c = c
+        self._K_max = K_max
+        self._vov = vov
+        self._rho = rho
+        self._sigma_0 = sigma_0
+
+    @property
+    def c(self):
+        return self._c
+    @c.setter
+    def c(self, new_c):
+        self._c = new_c
+    
+    @property
+    def K_max(self):
+        return self._K_max
+    @K_max.setter
+    def K_max(self, new_K_max):
+        self._K_max = new_K_max
+        
+    @property
+    def rho(self):
+        return self._rho
+    @rho.setter
+    def rho(self, new_rho):
+        self._rho = new_rho
+     
+    @property
+    def vov(self):
+        return self._vov
+    @vov.setter
+    def vov(self, new_vov):
+        self._vov = new_vov
+    
+    @property
+    def sigma_0(self):
+        return self._sigma_0
+    @sigma_0.setter
+    def sigma_0(self, new_sigma_0):
+        self._sigma_0 = new_sigma_0
+    
+    # need to have a ATM_LN to calculate total_var, which is used for
+    # the boundaries
+    @property
+    def ATM_LN(self):
+        if self.vol_type == 'LN':
+            return self.ATM
+        elif self.vol_type == 'N':
+            return self.ATM/self.f
+    @property
+    def ATM_N(self):
+        if self.vol_type == 'N':
+            return self.ATM
+        elif self.vol_type == 'LN':
+            return self.ATM*self.f
+
+    def __str__(self):
+        return r'c={:.2f}, K_max={:.2f}, vov={:.0%}, $\rho$={:.0%}, ATM={:.2%}, f={:.2%}, $\sigma_0$={:.2%}'        .format(self.c, self.K_max, self.vov, self.rho, self.ATM, self.f, self.sigma_0)
+    
+    def local_vol_inv_int(self, x):
+        """Closed form for the primitive of 1/(exp(-c*log(x/K_max)^2))
+        """
+        return (np.exp(-1/(4*self.c))*self.K_max*np.sqrt(np.pi)                *erfi((1+2*self.c*np.log(x/self.K_max))/(2*np.sqrt(self.c))))/(2*np.sqrt(self.c))
+    
+    @abc.abstractmethod
+    def smile_func(self, K):
+        pass
+
+
+# In[18]:
+
+
+class SABR_AS_LN(SABR_AS_base_model):
+    """SABR_AS model using lognormal implied vol quoting
+    """
+    def __init__(self, K_max=1, c=1, vov=1, rho=0,                 sigma_0=None, f=None, T_expiry=1,                 moneyness_lo=-3, moneyness_hi=3, n_strikes=50):
+        super().__init__(K_max=K_max, c=c, vov=vov, rho=rho,                         sigma_0=sigma_0, f=f, T_expiry=T_expiry,                         vol_type='LN',                         moneyness_lo=moneyness_lo, moneyness_hi=moneyness_hi,                         n_strikes=n_strikes)
+    
+    @property
+    def ATM_LN(self):
+        f_adj = self.f/self.K_max
+        C_f_adj = np.exp(-self.c*np.log(f_adj)**2)    
+        gamma_1 = -(2*self.c*np.log(f_adj))/self.f
+        gamma_2 = (2*self.c*(-1+np.log(f_adj)+2*self.c*np.log(f_adj)**2))/(self.f**2)
+        
+        return self.sigma_0/self.f*C_f_adj    *(1      +((2*gamma_2-gamma_1**2+1/(self.f**2))/24*self.sigma_0**2*C_f_adj**2       +0.25*self.rho*self.vov*self.sigma_0*gamma_1*C_f_adj       +(2-3*self.rho**2)/24*self.vov**2)      *self.T_expiry)
+
+    @property
+    def ATM(self):
+        return self.ATM_LN
+    
+    def smile_func(self, K):
+        """Hagan lognormal smile approximation around ATM as written in the
+        original 'Managing Smile Risk' paper using generic local vol (A.65)
+        K: strike
+        """
+        if np.abs(K-self.f)<ONE_BP/100:
+            return self.ATM
+        else:
+            log_moneyness = np.log(self.f/K)
+            f_avg = np.sqrt(self.f*K)
+            f_avg_adj = f_avg/self.K_max
+            C_f_avg_adj = np.exp(-self.c*np.log(f_avg_adj)**2)
+            
+            gamma_1 = -(2*self.c*np.log(f_avg_adj))/f_avg
+            gamma_2 = (2*self.c*(-1+np.log(f_avg_adj)+2*self.c*np.log(f_avg_adj)**2))/(f_avg**2)
+            
+            denom = self.local_vol_inv_int(self.f)-self.local_vol_inv_int(K)
+            zeta = self.vov/self.sigma_0*(self.f-K)/C_f_avg_adj
+            q_zeta = 1-2*self.rho*zeta+zeta**2
+            x_zeta = np.log((np.sqrt(q_zeta)-self.rho+zeta)/(1-self.rho))
+            return self.sigma_0*log_moneyness/denom*zeta/x_zeta        *(1          +((2*gamma_2-gamma_1**2+1/(f_avg**2))/24*self.sigma_0**2*C_f_avg_adj**2           +0.25*self.rho*self.vov*self.sigma_0*gamma_1*C_f_avg_adj           +(2-3*self.rho**2)/24*self.vov**2)          *self.T_expiry)
+
+
+# In[19]:
+
+
+class SABR_AS_N(SABR_AS_base_model):
+    """SABR_AS model using lognormal implied vol quoting
+    """
+    def __init__(self, K_max=1, c=1, vov=1, rho=0,                 sigma_0=None, f=None, T_expiry=1,                 moneyness_lo=-3, moneyness_hi=3, n_strikes=50):
+        super().__init__(K_max=K_max, c=c, vov=vov, rho=rho,                         sigma_0=sigma_0, f=f, T_expiry=T_expiry,                         vol_type='N',                         moneyness_lo=moneyness_lo, moneyness_hi=moneyness_hi,                         n_strikes=n_strikes)
+    
+    @property
+    def ATM_N(self):
+        f_adj = self.f/self.K_max
+        C_f_adj = np.exp(-self.c*np.log(f_adj)**2)    
+        gamma_1 = -(2*self.c*np.log(f_adj))/self.f
+        gamma_2 = (2*self.c*(-1+np.log(f_adj)+2*self.c*np.log(f_adj)**2))/(self.f**2)
+            
+        return self.sigma_0*C_f_adj    *(1      +((2*gamma_2-gamma_1**2)/24*self.sigma_0**2*C_f_adj**2       +0.25*self.rho*self.vov*self.sigma_0*gamma_1*C_f_adj       +(2-3*self.rho**2)/24*self.vov**2)      *self.T_expiry)
+
+    @property
+    def ATM(self):
+        return self.ATM_N
+    
+    def smile_func(self, K):
+        """Hagan lognormal smile approximation around ATM as written in the
+        original 'Managing Smile Risk' paper using generic local vol (A.65)
+        K: strike
+        """
+        if np.abs(K-self.f)<ONE_BP/100:
+            return self.ATM
+        else:
+            f_avg = np.sqrt(self.f*K)
+            f_avg_adj = f_avg/self.K_max
+            C_f_avg_adj = np.exp(-self.c*np.log(f_avg_adj)**2)
+            
+            gamma_1 = -(2*self.c*np.log(f_avg_adj))/f_avg
+            gamma_2 = (2*self.c*(-1+np.log(f_avg_adj)+2*self.c*np.log(f_avg_adj)**2))/(f_avg**2)
+            
             denom = self.local_vol_inv_int(self.f)-self.local_vol_inv_int(K)
             zeta = self.vov/self.sigma_0*(self.f-K)/C_f_avg_adj
             q_zeta = 1-2*self.rho*zeta+zeta**2
