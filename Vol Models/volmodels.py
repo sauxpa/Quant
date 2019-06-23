@@ -11,6 +11,7 @@ from scipy.misc import derivative
 from scipy.optimize import brentq
 from scipy.integrate import quad
 from scipy.special import erfi
+from scipy.special import erf
 from functools import partial
 from functools import lru_cache
 from ito_diffusion_multi_d import SABR
@@ -258,7 +259,7 @@ class Vol_model(abc.ABC):
     
     def pdf(self, K):
         """Probability density function of the underlyer, derived by differentiating twice
-        the model implied call prices with respect to the strike.
+        the model implied call pric+++++++++++++++++++++++++++++++es with respect to the strike.
         """
         return derivative(partial(self.option_price, payoff='Call'),                               K,                               dx=ONE_BP/10,
                                n=2,
@@ -727,17 +728,11 @@ class SABR_Goes_Normal(SABR_base_model):
     """SABR model with beta = 0 and ajusted sigma_0 to account for the actual local vol.
     Lognormal quoting.
     """
-    def __init__(self, beta=0, vov=1, rho=0,                 ATM=None, sigma_0=None, f=None, T_expiry=1,                 vol_type='LN', marking_mode='ATM',                 moneyness_lo=None, moneyness_hi=None, K_lo=None, K_hi=None,                 strike_type='logmoneyness', n_strikes=50,                 n_integral=1, moneyness_switch_lo=-2, moneyness_switch_hi=2):
+    def __init__(self, beta=0, vov=1, rho=0,                 ATM=None, sigma_0=None, f=None, T_expiry=1,                 vol_type='LN', marking_mode='ATM',                 moneyness_lo=None, moneyness_hi=None, K_lo=None, K_hi=None,                 strike_type='logmoneyness', n_strikes=50,                 n_integral=1):
         super().__init__(beta=beta, vov=vov, rho=rho,                         ATM=ATM, sigma_0=sigma_0, f=f, T_expiry=T_expiry,                         vol_type=vol_type, marking_mode=marking_mode,                         moneyness_lo=moneyness_lo, moneyness_hi=moneyness_hi,                         K_lo=K_lo, K_hi=K_hi,                         strike_type=strike_type, n_strikes=n_strikes)
         # number of discretization step of the integral in the approximation formula 
         self._n_integral = n_integral
         
-        # boundaries to determine the choice of pricing model
-        # around ATM : price from adjusted normal vol expansion
-        # outside ATM : local vol integration
-        self._moneyness_switch_lo = moneyness_lo
-        self._moneyness_switch_hi = moneyness_switch_hi
-    
     @property
     def n_integral(self):
         return self._n_integral
@@ -774,15 +769,13 @@ class SABR_Goes_Normal(SABR_base_model):
         X_0 = self.f-K
         num = np.sqrt(self.q(x, K))-self.rho+self.vov_scaled(K)*x
         denom = np.sqrt(self.q(X_0, K))-self.rho+self.vov_scaled(K)*X_0
-        return 1/(self.vov_scaled(K)*self.sigma_0_effective(K))*np.log(num/denom)
+        return 1/(self.vov)*np.log(num/denom)
 
     def dJ(self, x, K):
         """Helper function for the call/put price approximation
         """
-        num = (self.vov_scaled(K)**2*x-self.vov_scaled(K)*self.rho)/np.sqrt(self.q(x, K))        +self.vov_scaled(K)
-        denom = np.sqrt(self.q(x, K))-self.rho+self.vov_scaled(K)*x
-        return 1/(self.vov_scaled(K)*self.sigma_0_effective(K))*num/denom
-    
+        return 1/(self.sigma_0_effective(K)*np.sqrt(self.q(x, K)))
+        
     def local_time(self, t, x, K=None):
         """Density of (S_t-K)/(alpha_t) at x under the stochastic vol measure
         """
@@ -797,32 +790,35 @@ class SABR_Goes_Normal(SABR_base_model):
         """Returns the call/put price approximation derived for normal SABR
         in "SABR Goes Normal".
         """
-        if np.log(self.f/K) > self._moneyness_switch_lo        and np.log(self.f/K) < self._moneyness_switch_hi:
-            return self.IV.price_from_vol(self.smile_func(K), self.f, K, self.T_expiry,                                          payoff=payoff)
-        else:
-            if payoff == "Call":
-                return self.call_price(K)
-            elif payoff == "Put":
-                return self.call_pric(K) + (K-self.f)
-            
+        if payoff == "Call":
+            return self.call_price(K)
+        elif payoff == "Put":
+            return self.call_pric(K) + (K-self.f)
+    
+    def int_local_time(self, t, K):
+        """Explicit form for the integral of the local time between 0 and t
+        """
+        dJ = self.dJ(0, K)
+        J = self.J(0, K)
+        return dJ*np.exp(-J**2/(2*t))*np.sqrt(2/np.pi)*np.sqrt(t)    +dJ*J*(np.erf(J/(np.sqrt(2*t)))-1)
+    
     def call_price(self, K):
         """Returns the call price approximation derived from normal SABR
         """
         X_0 = self.f-K
         intrinsic_value = max(X_0, 0)
 
+        #s = self.int_local_time(self.T_expiry, K)
+        
         s = 0
         time_steps = [t*self.step_integral for t in range(self.n_integral)]
-
         for t in time_steps:
             t_next = t + self.step_integral
             t_mid = 0.5*(t+t_next)
-
+        
             f = partial( self.integrand, K, t_mid )
             L = X_0 - quad(f, -np.inf, np.inf, limit=10)[0]
-
             s += self.local_time(t_mid, -L, K=K)*self.step_integral
-
         return intrinsic_value+0.5*self.sigma_0_effective(K)**2*s
 
 
@@ -833,8 +829,8 @@ class SABR_Goes_Normal_LN(SABR_Goes_Normal):
     """SABR model with beta = 0 and ajusted sigma_0 to account for the actual local vol.
     Lognormal quoting.
     """
-    def __init__(self, beta=0, vov=1, rho=0,                 ATM=None, sigma_0=None, f=None, T_expiry=1,                 marking_mode='ATM',                 moneyness_lo=None, moneyness_hi=None, K_lo=None, K_hi=None,                 strike_type='logmoneyness', n_strikes=50,                 n_integral=1, moneyness_switch_lo=-1, moneyness_switch_hi=1):
-        super().__init__(beta=beta, vov=vov, rho=rho,                         ATM=ATM, sigma_0=sigma_0, f=f, T_expiry=T_expiry,                         vol_type='LN', marking_mode=marking_mode,                         moneyness_lo=moneyness_lo, moneyness_hi=moneyness_hi,                         K_lo=K_lo, K_hi=K_hi,                         strike_type=strike_type, n_strikes=n_strikes, n_integral=n_integral,                         moneyness_switch_lo=moneyness_switch_lo,                         moneyness_switch_hi=moneyness_switch_hi)
+    def __init__(self, beta=0, vov=1, rho=0,                 ATM=None, sigma_0=None, f=None, T_expiry=1,                 marking_mode='ATM',                 moneyness_lo=None, moneyness_hi=None, K_lo=None, K_hi=None,                 strike_type='logmoneyness', n_strikes=50,                 n_integral=1):
+        super().__init__(beta=beta, vov=vov, rho=rho,                         ATM=ATM, sigma_0=sigma_0, f=f, T_expiry=T_expiry,                         vol_type='LN', marking_mode=marking_mode,                         moneyness_lo=moneyness_lo, moneyness_hi=moneyness_hi,                         K_lo=K_lo, K_hi=K_hi,                         strike_type=strike_type, n_strikes=n_strikes, n_integral=n_integral)
     
     @property
     def model_name(self):
@@ -865,8 +861,8 @@ class SABR_Goes_Normal_N(SABR_Goes_Normal):
     """SABR model with beta = 0 and ajusted sigma_0 to account for the actual local vol.
     Normal quoting.
     """
-    def __init__(self, beta=0, vov=1, rho=0,                 ATM=None, sigma_0=None, f=None, T_expiry=1,                 marking_mode='ATM',                 moneyness_lo=None, moneyness_hi=None, K_lo=None, K_hi=None,                 strike_type='logmoneyness', n_strikes=50,                 n_integral=1, moneyness_switch_lo=-1, moneyness_switch_hi=1):
-        super().__init__(beta=beta, vov=vov, rho=rho,                         ATM=ATM, sigma_0=sigma_0, f=f, T_expiry=T_expiry,                         vol_type='N', marking_mode=marking_mode,                         moneyness_lo=moneyness_lo, moneyness_hi=moneyness_hi,                         K_lo=K_lo, K_hi=K_hi,                         strike_type=strike_type, n_strikes=n_strikes, n_integral=n_integral,                         moneyness_switch_lo=moneyness_switch_lo,                         moneyness_switch_hi=moneyness_switch_hi)
+    def __init__(self, beta=0, vov=1, rho=0,                 ATM=None, sigma_0=None, f=None, T_expiry=1,                 marking_mode='ATM',                 moneyness_lo=None, moneyness_hi=None, K_lo=None, K_hi=None,                 strike_type='logmoneyness', n_strikes=50,                 n_integral=1):
+        super().__init__(beta=beta, vov=vov, rho=rho,                         ATM=ATM, sigma_0=sigma_0, f=f, T_expiry=T_expiry,                         vol_type='N', marking_mode=marking_mode,                         moneyness_lo=moneyness_lo, moneyness_hi=moneyness_hi,                         K_lo=K_lo, K_hi=K_hi,                         strike_type=strike_type, n_strikes=n_strikes, n_integral=n_integral)
     
     @property
     def model_name(self):
