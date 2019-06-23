@@ -127,7 +127,12 @@ class Vol_model(abc.ABC):
         
     def __str__(self):
         return 'Generic vol model'
-        
+    
+    @property
+    @abc.abstractmethod
+    def model_name(self):
+        pass
+    
     @property
     def f(self):
         return self._f
@@ -320,7 +325,7 @@ class SLN_adjustable_backbone(Vol_model):
         self._shift = shift
         self._mixing = mixing
         self._L = L
-        
+    
     @property
     def sigma(self):
         return self._sigma
@@ -366,6 +371,10 @@ class SLN_adjustable_backbone_LN(SLN_adjustable_backbone):
     def __init__(self, sigma=1, shift=0, mixing=0, L=0,                 f=None, T_expiry=1,                 moneyness_lo=None, moneyness_hi=None, K_lo=None, K_hi=None,                 strike_type='logmoneyness', n_strikes=50):
         super().__init__(sigma=sigma, shift=shift, mixing=mixing, L=L,                         f=f, T_expiry=T_expiry, vol_type='LN',                         moneyness_lo=moneyness_lo, moneyness_hi=moneyness_hi,                         K_lo=K_lo, K_hi=K_hi,                         strike_type=strike_type, n_strikes=n_strikes)
         
+    @property
+    def model_name(self):
+        return 'SLN_adjustable_backbone_LN'
+    
     @property
     def ATM_LN(self):
         local_vol_f = self.mixing*self.f+(1-self.mixing)*self.L
@@ -426,7 +435,7 @@ class SABR_base_model(Vol_model):
 
     def __str__(self):
         return r'T_expiry={}y, $\beta$={:.2f}, vov={:.2%}, $\rho$={:.2%}, f={:.2%}, $\sigma_0$={:.2%}'    .format(self.T_expiry, self.beta, self.vov, self.rho, self.f, self.sigma_0)   
-            
+    
     @property
     def beta(self):
         return self._beta
@@ -542,7 +551,11 @@ class SABR_Hagan_LN(SABR_base_model):
     
     def __str__(self):
         return r'$T_expiry={}y, \beta$={:.2f}, vov={:.2%}, $\rho$={:.2%}, ATM={:.2%}, f={:.2%}, $\sigma_0$={:.2%}'    .format(self.T_expiry, self.beta, self.vov, self.rho, self.ATM, self.f, self.sigma_0)
-        
+    
+    @property
+    def model_name(self):
+        return 'SABR_Hagan_LN'
+    
     def smile_func(self, K):
         """Hagan lognormal smile approximation around ATM as written in the
         original 'Managing Smile Risk' paper (A.69c)
@@ -574,6 +587,10 @@ class SABR_Hagan_N(SABR_base_model):
     
     def __str__(self):
         return r'T_expiry={}y, $\beta$={:.2f}, vov={:.2%}, $\rho$={:.2%}, ATM={:.2f}bps, f={:.2%}, $\sigma_0$={:.2%}'    .format(self.T_expiry, self.beta, self.vov, self.rho, self.ATM/ONE_BP, self.f, self.sigma_0)  
+    
+    @property
+    def model_name(self):
+        return 'SABR_Hagan_N'
     
     def smile_func(self, K):
         """Hagan normal smile approximation around ATM as written in the
@@ -621,7 +638,11 @@ class SABR_MC(SABR_base_model):
         super().__init__(beta=beta, vov=vov, rho=rho,                         ATM=ATM, sigma_0=sigma_0, f=f, T_expiry=T_expiry,                         vol_type=vol_type, marking_mode=marking_mode,                         moneyness_lo=moneyness_lo, moneyness_hi=moneyness_hi,                         K_lo=K_lo, K_hi=K_hi,                         strike_type=strike_type, n_strikes=n_strikes)
         self._n_sim = n_sim
         self._scheme_steps = scheme_steps
-        
+    
+    @property
+    def model_name(self):
+        return 'SABR_Hagan_MC'
+    
     @property
     def n_sim(self):
         return self._n_sim
@@ -814,10 +835,14 @@ class SABR_Goes_Normal_LN(SABR_Goes_Normal):
     """
     def __init__(self, beta=0, vov=1, rho=0,                 ATM=None, sigma_0=None, f=None, T_expiry=1,                 marking_mode='ATM',                 moneyness_lo=None, moneyness_hi=None, K_lo=None, K_hi=None,                 strike_type='logmoneyness', n_strikes=50,                 n_integral=1, moneyness_switch_lo=-1, moneyness_switch_hi=1):
         super().__init__(beta=beta, vov=vov, rho=rho,                         ATM=ATM, sigma_0=sigma_0, f=f, T_expiry=T_expiry,                         vol_type='LN', marking_mode=marking_mode,                         moneyness_lo=moneyness_lo, moneyness_hi=moneyness_hi,                         K_lo=K_lo, K_hi=K_hi,                         strike_type=strike_type, n_strikes=n_strikes, n_integral=n_integral,                         moneyness_switch_lo=moneyness_switch_lo,                         moneyness_switch_hi=moneyness_switch_hi)
-        
+    
+    @property
+    def model_name(self):
+        return 'SABR_Goes_Normal_LN'
+    
     def smile_func(self, K):
         """Hagan normal smile approximation around ATM for beta = 0 as written in the
-        original 'Managing Smile Risk' paper (A.70a)
+        original 'Managing Smile Risk' paper (A.70b)
         K: strike
         """
         b_0 = self.sigma_0_effective(K)
@@ -842,20 +867,27 @@ class SABR_Goes_Normal_N(SABR_Goes_Normal):
     """
     def __init__(self, beta=0, vov=1, rho=0,                 ATM=None, sigma_0=None, f=None, T_expiry=1,                 marking_mode='ATM',                 moneyness_lo=None, moneyness_hi=None, K_lo=None, K_hi=None,                 strike_type='logmoneyness', n_strikes=50,                 n_integral=1, moneyness_switch_lo=-1, moneyness_switch_hi=1):
         super().__init__(beta=beta, vov=vov, rho=rho,                         ATM=ATM, sigma_0=sigma_0, f=f, T_expiry=T_expiry,                         vol_type='N', marking_mode=marking_mode,                         moneyness_lo=moneyness_lo, moneyness_hi=moneyness_hi,                         K_lo=K_lo, K_hi=K_hi,                         strike_type=strike_type, n_strikes=n_strikes, n_integral=n_integral,                         moneyness_switch_lo=moneyness_switch_lo,                         moneyness_switch_hi=moneyness_switch_hi)
-        
+    
+    @property
+    def model_name(self):
+        return 'SABR_Goes_Normal_N'
+    
     def smile_func(self, K):
         """Hagan normal smile approximation around ATM for beta = 0 as written in the
         original 'Managing Smile Risk' paper (A.70a)
         K: strike
         """
         b_0 = self.sigma_0_effective(K)
-        log_moneyness = np.log(self.f/K)
-        f_avg = np.sqrt(self.f*K)
-        zeta = self.vov/b_0*f_avg*log_moneyness
-        q_zeta = 1-2*self.rho*zeta+zeta**2
-        x_zeta = np.log((np.sqrt(q_zeta)-self.rho+zeta)/(1-self.rho))
-            
-        return b_0*zeta/x_zeta*    (1+((2-3*self.rho**2)/24*self.vov**2)*self.T_expiry)
+        if np.abs(K-self.f)<ONE_BP/100:
+            return b_0*(1                        + ((2-3*self.rho**2)/24*self.vov**2)*self.T_expiry)
+        else:
+            log_moneyness = np.log(self.f/K)
+            f_avg = np.sqrt(self.f*K)
+            zeta = self.vov/b_0*f_avg*log_moneyness
+            q_zeta = 1-2*self.rho*zeta+zeta**2
+            x_zeta = np.log((np.sqrt(q_zeta)-self.rho+zeta)/(1-self.rho))
+
+            return b_0*zeta/x_zeta*        (1+((2-3*self.rho**2)/24*self.vov**2)*self.T_expiry)
 
 
 # ## Modified SABR with tanh local vol
@@ -935,6 +967,10 @@ class SABR_tanh_LN(SABR_tanh_base_model):
         super().__init__(l=l, vov=vov, rho=rho,                         sigma_0=sigma_0, f=f, T_expiry=T_expiry,                         vol_type='LN',                         moneyness_lo=moneyness_lo, moneyness_hi=moneyness_hi,                         K_lo=K_lo, K_hi=K_hi,                         strike_type=strike_type, n_strikes=n_strikes)
     
     @property
+    def model_name(self):
+        return 'SABR_tanh_LN'
+    
+    @property
     def ATM_LN(self):
         f_adj = self.f/self.l
         C_f_adj = np.tanh(f_adj)
@@ -975,6 +1011,10 @@ class SABR_tanh_N(SABR_tanh_base_model):
     """
     def __init__(self, l=1, vov=1, rho=0,                 sigma_0=None, f=None, T_expiry=1,                 moneyness_lo=None, moneyness_hi=None, K_lo=None, K_hi=None,                 strike_type='logmoneyness', n_strikes=50):
         super().__init__(l=l, vov=vov, rho=rho,                         sigma_0=sigma_0, f=f, T_expiry=T_expiry,                         vol_type='N',                         moneyness_lo=moneyness_lo, moneyness_hi=moneyness_hi,                         K_lo=K_lo, K_hi=K_hi,                         strike_type=strike_type, n_strikes=n_strikes)
+    
+    @property
+    def model_name(self):
+        return 'SABR_tanh_N'
     
     @property
     def ATM_N(self):
@@ -1088,6 +1128,10 @@ class SABR_AS_LN(SABR_AS_base_model):
         super().__init__(K_max=K_max, c=c, vov=vov, rho=rho,                         sigma_0=sigma_0, f=f, T_expiry=T_expiry,                         vol_type='LN',                         moneyness_lo=moneyness_lo, moneyness_hi=moneyness_hi,                         K_lo=K_lo, K_hi=K_hi,                         strike_type=strike_type, n_strikes=n_strikes)
     
     @property
+    def model_name(self):
+        return 'SABR_AS_LN'
+    
+    @property
     def ATM_LN(self):
         f_adj = self.f/self.K_max
         C_f_adj = np.exp(-self.c*np.log(f_adj)**2)    
@@ -1131,6 +1175,10 @@ class SABR_AS_N(SABR_AS_base_model):
     """
     def __init__(self, K_max=1, c=1, vov=1, rho=0,                 sigma_0=None, f=None, T_expiry=1,                 moneyness_lo=None, moneyness_hi=None, K_lo=None, K_hi=None,                 strike_type='logmoneyness', n_strikes=50):
         super().__init__(K_max=K_max, c=c, vov=vov, rho=rho,                         sigma_0=sigma_0, f=f, T_expiry=T_expiry,                         vol_type='N',                         moneyness_lo=moneyness_lo, moneyness_hi=moneyness_hi,                         K_lo=K_lo, K_hi=K_hi,                         strike_type=strike_type, n_strikes=n_strikes)
+    
+    @property
+    def model_name(self):
+        return 'SABR_AS_N'
     
     @property
     def ATM_N(self):
