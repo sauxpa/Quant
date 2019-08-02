@@ -1,21 +1,14 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
-
-
 import numpy as np
 import abc
 from collections import defaultdict
-
 
 # ## Generic Ito diffusion
 # 𝑑𝑋𝑡=𝑏(𝑡,𝑋𝑡)𝑑𝑡+𝜎(𝑡,𝑋𝑡)𝑑𝑊𝑡.
 # 
 # Supports standard gaussian noise and fractional gaussian noise.
-
-# In[2]:
-
 
 class Ito_diffusion(abc.ABC):
     """Generic class for Ito diffusion
@@ -24,7 +17,14 @@ class Ito_diffusion(abc.ABC):
     Typical example : barrier=0, barrier_condition='absorb'
     (only this one is supported for now)
     """
-    def __init__(self, x0=0, T=1, scheme_steps=100,                 barrier=None, barrier_condition=None,                 noise_params=defaultdict(int)):
+    def __init__(self, 
+                 x0: float=0.0,
+                 T: float=1.0,
+                 scheme_steps: int=100, 
+                 barrier=None, 
+                 barrier_condition=None,
+                 noise_params: defaultdict=defaultdict(int)
+                ) -> None:
         self._x0 = x0
         self._T = T
         self._scheme_steps = scheme_steps
@@ -33,24 +33,24 @@ class Ito_diffusion(abc.ABC):
         self._noise_params = noise_params
         
     @property
-    def x0(self):
+    def x0(self) -> float:
         return self._x0
     @x0.setter
-    def x0(self, new_x0):
+    def x0(self, new_x0: float) -> None:
         self._x0 = new_x0
     
     @property
-    def T(self):
+    def T(self) -> float:
         return self._T
     @T.setter
-    def T(self, new_T):
+    def T(self, new_T) -> None:
         self._T = new_T
     
     @property
-    def scheme_steps(self):
+    def scheme_steps(self) -> int:
         return self._scheme_steps
     @scheme_steps.setter
-    def scheme_steps(self, new_scheme_steps):
+    def scheme_steps(self, new_scheme_steps) -> None:
         self.scheme_steps = new_scheme_steps
     
     @property
@@ -63,7 +63,7 @@ class Ito_diffusion(abc.ABC):
     @property
     def barrier_condition(self):
         if self._barrier_condition not in [ None, 'absorb']:
-            raise NameError("Unsupported barrier condition : {}"                            .format(self._barrier_condition))
+            raise NameError("Unsupported barrier condition : {}".format(self._barrier_condition))
         else:
             return self._barrier_condition
     @barrier_condition.setter
@@ -71,14 +71,14 @@ class Ito_diffusion(abc.ABC):
         self._barrier_condition = barrier_condition
         
     @property
-    def noise_params(self):
+    def noise_params(self) -> defaultdict:
         return self._noise_params
     @noise_params.setter
-    def noise_params(self, new_noise_params):
+    def noise_params(self, new_noise_params) -> None:
         self._noise_params = new_noise_params
         
     @property
-    def noise_type(self):
+    def noise_type(self) -> str:
         noise_type = self.noise_params['type']
         if noise_type:
             return noise_type
@@ -86,18 +86,18 @@ class Ito_diffusion(abc.ABC):
             return 'gaussian'
     
     @property
-    def scheme_step(self):
+    def scheme_step(self) -> float:
         return self.T/self.scheme_steps
     
     @property
-    def scheme_step_sqrt(self):
+    def scheme_step_sqrt(self) -> float:
         return np.sqrt(self.scheme_step)
-   
-    @property
-    def time_steps(self):
-        return [ step*self.scheme_step for step in range(self.scheme_steps+1) ]
     
-    def barrier_crossed(self, x, y, barrier):
+    @property
+    def time_steps(self) -> list:
+        return [step*self.scheme_step for step in range(self.scheme_steps+1)]
+    
+    def barrier_crossed(self, x, y, barrier) -> bool:
         """barrier is crossed if x and y are on each side of the barrier
         """
         return (x<=barrier and y>=barrier) or (x>=barrier and y<=barrier)
@@ -113,4 +113,3 @@ class Ito_diffusion(abc.ABC):
     @abc.abstractmethod
     def simulate(self):
         pass
-
