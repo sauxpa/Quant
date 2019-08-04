@@ -36,10 +36,7 @@ class Ito_diffusion_1d(Ito_diffusion):
         x = [last_step]
         
         if self.noise_type == 'fgaussian':
-            noises = Fractional_Gaussian_Noise(T=self.T, 
-                                               scheme_steps=self.scheme_steps,
-                                               H=self.noise_params['H']
-                                              ).simulate()
+            noises = self.noise.simulate()
         for i, t in enumerate(self.time_steps[1:]):
             # for regular gaussian noise, generate them sequentially
             if self.noise_type == 'gaussian':
@@ -535,33 +532,50 @@ class FBM(BM):
                  scheme_steps: int=100, 
                  drift: float=0.0, 
                  vol: float=1.0, 
-                 H: float=0.5,
+                 H: float=1.0,
+                 method: str='vector',
+                 n_kl: int=100,
                  barrier=None, 
                  barrier_condition=None
                 ) -> None:
+        
+        noise_params = {
+            'type': 'fgaussian',
+            'H': H,
+            'method': method,
+            'n_kl': n_kl,
+        }
         super().__init__(x0=x0, 
                          T=T, 
                          scheme_steps=scheme_steps,
                          barrier=barrier,
-                         barrier_condition=barrier_condition
+                         barrier_condition=barrier_condition,
+                         noise_params=noise_params,
                         )
-        self._H = H
-        self.noise_params = {
-            'type': 'fgaussian',
-            'H' : self._H,
-        }
         
     @property
     def H(self) -> float:
-        return self._H
+        return self.noise._H
     @H.setter
     def H(self, new_H) -> None:
-        self.noise_params = {
-            'type': 'fgaussian',
-            'H' : new_H,
-        }
-        self._H = new_H
+        self.noise_params['H'] = new_H
+        self.noise.H = new_H
+        
+    @property
+    def n_kl(self) -> int:
+        return self.noise._n_kl
+    @n_kl.setter
+    def n_kl(self, new_n_kl) -> None:
+        self.noise_params['n_kl'] = new_n_kl 
+        self.noise.n_kl = new_n_kl
 
+    @property
+    def method(self) -> float:
+        return self.noise._method
+    @method.setter
+    def method(self, new_method) -> None:
+        self.noise_params['method'] = new_method
+        self.noise.method = new_method
 
 # Multifractal diffusions
 
