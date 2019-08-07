@@ -41,12 +41,13 @@ class Ito_diffusion(abc.ABC):
             noise_type = 'gaussian'
         
         if noise_type == 'fgaussian':
-            self._noise = Fractional_Gaussian_Noise(T=self._T,
-                                                    scheme_steps=self._scheme_steps,
-                                                    H=self._noise_params['H'],
-                                                    n_kl=self._noise_params.get('n_kl', 100),
-                                                    method=self._noise_params.get('method', 'vector')
-                                                   )
+            self._noise = Fractional_Gaussian_Noise(
+                T=self._T,
+                scheme_steps=self._scheme_steps,
+                H=self._noise_params['H'],
+                n_kl=self._noise_params.get('n_kl', 100),
+                method=self._noise_params.get('method', 'vector')
+               )
         else:
             self._noise = None
         
@@ -69,8 +70,17 @@ class Ito_diffusion(abc.ABC):
         return self._scheme_steps
     @scheme_steps.setter
     def scheme_steps(self, new_scheme_steps) -> None:
-        self.scheme_steps = new_scheme_steps
-    
+        self._scheme_steps = new_scheme_steps
+        # if a Hurst index is specified but is equal to 0.5
+        # then simply use the gaussian noise
+        if self.noise_type == 'fgaussian':
+            self._noise = Fractional_Gaussian_Noise(
+                T=self.T,
+                scheme_steps=new_scheme_steps,
+                H=self._noise_params['H'],
+                n_kl=self._noise_params.get('n_kl', 100),
+                method=self._noise_params.get('method', 'vector')
+               )
     @property
     def barrier(self):
         return self._barrier
@@ -102,12 +112,13 @@ class Ito_diffusion(abc.ABC):
             noise_type = 'gaussian'
         
         if noise_type == 'fgaussian':
-            self._noise = Fractional_Gaussian_Noise(T=self.T,
-                                                    scheme_steps=self.scheme_steps,
-                                                    H=self._noise_params['H'],
-                                                    n_kl=self._noise_params.get('n_kl', 100),
-                                                    method=self._noise_params.get('method', 'vector')
-                                                   )
+            self._noise = Fractional_Gaussian_Noise(
+                T=self.T,
+                scheme_steps=self.scheme_steps,
+                H=self._noise_params['H'],
+                n_kl=self._noise_params.get('n_kl', 100),
+                method=self._noise_params.get('method', 'vector')
+               )
         else:
             self._noise = None
         
