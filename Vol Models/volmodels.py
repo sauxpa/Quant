@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
-
-
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import norm
@@ -17,22 +14,13 @@ from functools import lru_cache
 from ito_diffusion_multi_d import SABR
 import abc
 
-
-# In[2]:
-
-
 ONE_BP = 1e-4
 ONE_PCT = 1e-2
-
 
 # ## Implied vol Black/normal quoter
 # 
 # Handles vol --> price and price --> vol conversions for European calls and puts
 # 
-
-# In[3]:
-
-
 class Implied_vol():
     def __init__(self, vol_type='LN'):
         self._vol_type = vol_type
@@ -90,14 +78,9 @@ class Implied_vol():
         except:
             print('Price: {}, strike: {}, payoff: {}'.format(price, K, payoff))
 
-
 # ## Generic vol model
 # 
 # Handles option pricing and vol surface interpolation
-
-# In[4]:
-
-
 class Vol_model(abc.ABC):
     """Generic class for option quoting
     """
@@ -305,14 +288,148 @@ class Vol_model(abc.ABC):
     def pdf_plot(self, log_moneyness=False,                font_size=32, legend_size=32):
         return self.plot(log_moneyness=log_moneyness, curve_type='pdf',                        font_size=font_size, legend_size=legend_size)
 
+# ## SVI 
+# 
+# Stochastic Volatility Inspired
+# Not a diffusion model but rather a vol surface parametrization
+class SVI_Raw(Vol_model):
+    """Gatheral's raw SVI
+    w(k) = a + b * ( rho * ( k - m ) + sqrt( ( k - m ) ^ 2 + sigma ^ 2 ) )
+    where w(k) = sigma^2(k)*T_expiry is the total variance
+    """
+    def __init__(self, 
+                 a=1, 
+                 b=0,
+                 rho=0, 
+                 m=0,
+                 sigma=0,
+                 f=None, 
+                 T_expiry=1, 
+                 vol_type=None,
+                 moneyness_lo=None, 
+                 moneyness_hi=None, 
+                 K_lo=None, 
+                 K_hi=None,
+                 strike_type='logmoneyness', 
+                 n_strikes=50
+                ):
+        super().__init__(
+            f=f, 
+            T_expiry=T_expiry, 
+            vol_type=vol_type,                         
+            moneyness_lo=moneyness_lo, 
+            moneyness_hi=moneyness_hi,
+            K_lo=K_lo, 
+            K_hi=K_hi,
+            strike_type=strike_type, 
+            n_strikes=n_strikes
+        )
+        self._a = a
+        self._b = b
+        self._rho = rho
+        self._m = m
+        self._sigma = sigma
+    
+    @property
+    def sigma(self):
+        return self._sigma
+    @sigma.setter
+    def sigma(self, new_sigma):
+        self._sigma = new_sigma
+    
+    @property
+    def a(self):
+        return self._a
+    @a.setter
+    def a(self, new_a):
+        self._a = new_a
+    
+    @property
+    def b(self):
+        return self._b
+    @b.setter
+    def b(self, new_b):
+        self._b = new_b
 
+    @property
+    def rho(self):
+        return self._rho
+    @rho.setter
+    def rho(self, new_rho):
+        self._rho = new_rho
+        
+    @property
+    def m(self):
+        return self._m
+    @m.setter
+    def m(self, new_m):
+        self._m = new_m
+
+    def __str__(self):
+        return r'$a$={:.2f}, $b$={:.2f}, $\rho$={:.0%}, m={:.2f}, $\sigma$={:.2f}, f={:.2%}'        .format(self.a, self.b, self.rho, self.m, self.sigma, self.f)
+    
+    @abc.abstractmethod
+    def smile_func(self, K):
+        pass
+    
+class SVI_Raw_LN(SVI_Raw):
+    """Gatheral's raw SVI in lognormal quoting
+    """
+    def __init__(self, 
+                 a=1, 
+                 b=0,
+                 rho=0, 
+                 m=0,
+                 sigma=0,
+                 f=None, 
+                 T_expiry=1, 
+                 moneyness_lo=None, 
+                 moneyness_hi=None, 
+                 K_lo=None, 
+                 K_hi=None,
+                 strike_type='logmoneyness', 
+                 n_strikes=50
+                ):
+        super().__init__(
+            a=a,
+            b=b,
+            rho=rho,
+            m=m,
+            sigma=sigma,
+            f=f, 
+            T_expiry=T_expiry, 
+            vol_type='LN',                         
+            moneyness_lo=moneyness_lo, 
+            moneyness_hi=moneyness_hi,
+            K_lo=K_lo, 
+            K_hi=K_hi,
+            strike_type=strike_type, 
+            n_strikes=n_strikes
+        )
+        
+    @property
+    def model_name(self):
+        return 'SVI_Raw_LN'
+    
+    @property
+    def ATM_LN(self):
+        total_var = self.a + self.b * (self.rho * (-self.m) + np.sqrt((-self.m) ** 2 + self.sigma ** 2))
+        return np.sqrt(total_var/self.T_expiry)
+        
+    @property
+    def ATM(self):
+        return self.ATM_LN
+    
+    def smile_func(self, K):
+        """Implied vol comes from the SVI parametrization of the total variance
+        """
+        k = np.log(K/self.f)
+        total_var = self.a + self.b * (self.rho * (k - self.m) + np.sqrt((k - self.m) ** 2 + self.sigma ** 2))
+        return np.sqrt(total_var/self.T_expiry)
+    
 # ## Displaced lognormal
 # 
 # Pure local volatility model here
-
-# In[5]:
-
-
 class SLN_adjustable_backbone(Vol_model):
     """Shifted lognormal model with adjustable backbone as developped 
     in Andersen and Piterbarg in (16.5):
@@ -362,10 +479,6 @@ class SLN_adjustable_backbone(Vol_model):
     def smile_func(self, K):
         pass
 
-
-# In[6]:
-
-
 class SLN_adjustable_backbone_LN(SLN_adjustable_backbone):
     """Shifted lognormal model with adjustable backbone in lognormal quoting
     """
@@ -405,10 +518,6 @@ class SLN_adjustable_backbone_LN(SLN_adjustable_backbone):
 # * Hagan normal implied vol
 # * Hagan lognormal implied
 # * Monte Carlo
-
-# In[7]:
-
-
 class SABR_base_model(Vol_model):
     """Generic class for SABR model
     """
@@ -538,12 +647,7 @@ class SABR_base_model(Vol_model):
     def smile_func(self, K):
         pass
 
-
 # ### Hagan lognormal (Black) implied vol expansion
-
-# In[8]:
-
-
 class SABR_Hagan_LN(SABR_base_model):
     """SABR model using lognormal implied vol quoting from Hagan's formula
     """
@@ -572,12 +676,7 @@ class SABR_Hagan_LN(SABR_base_model):
             f_avg = np.sqrt(self.f*K)
             return self.sigma_0/                                (f_avg**(1-self.beta)*(1                                    +((1-self.beta)**2)/24*log_moneyness**2                                   +((1-self.beta)**4)/1920*log_moneyness**4))*    (zeta/x_zeta)*    (1+(((1-self.beta)**2)/24*self.sigma_0**2/(f_avg**(2-2*self.beta))     +0.25*self.rho*self.beta*self.vov*self.sigma_0/(f_avg**(1-self.beta))     +(2-3*self.rho**2)/24*self.vov**2)*self.T_expiry)
 
-
 # ### Hagan normal implied vol expansion
-
-# In[9]:
-
-
 class SABR_Hagan_N(SABR_base_model):
     """SABR model using normal implied vol quoting from Hagan's formula
     """
@@ -626,12 +725,7 @@ class SABR_Hagan_N(SABR_base_model):
             g = -self.beta*(2-self.beta)/(24*(f_avg)**(2-2*self.beta))
             return self.sigma_0*(1-self.beta)*(self.f-K)        /(self.f**(1-self.beta)-K**(1-self.beta))*(zeta/x_zeta)*        (1+         (g*self.sigma_0**2+0.25*self.rho*self.vov*self.sigma_0*self.beta/(f_avg**(1-self.beta))          +(2-3*self.rho**2)/24*self.vov**2)         *self.T_expiry)
 
-
 # ### Monte Carlo pricer, by discretizing the SABR SDEs
-
-# In[10]:
-
-
 class SABR_MC(SABR_base_model):
     """SABR model with Monte Carlo pricing
     """
@@ -716,14 +810,9 @@ class SABR_MC(SABR_base_model):
         price = self.option_price(K, payoff=payoff)
         return self.IV.vol_from_price(price, self.f, K, self.T_expiry, payoff=payoff)
 
-
 # ## Normal SABR
 # 
 # SABR formula for $\beta=0$ with an adjusted $\sigma_0$ to account for the actual local vol in the model.
-
-# In[11]:
-
-
 class SABR_Goes_Normal(SABR_base_model):
     """SABR model with beta = 0 and ajusted sigma_0 to account for the actual local vol.
     Lognormal quoting.
@@ -821,10 +910,6 @@ class SABR_Goes_Normal(SABR_base_model):
             s += self.local_time(t_mid, -L, K=K)*self.step_integral
         return intrinsic_value+0.5*self.sigma_0_effective(K)**2*s
 
-
-# In[12]:
-
-
 class SABR_Goes_Normal_LN(SABR_Goes_Normal):
     """SABR model with beta = 0 and ajusted sigma_0 to account for the actual local vol.
     Lognormal quoting.
@@ -852,10 +937,6 @@ class SABR_Goes_Normal_LN(SABR_Goes_Normal):
             x_zeta = np.log((np.sqrt(q_zeta)-self.rho+zeta)/(1-self.rho))
 
             return b_0*log_moneyness/(self.f-K)*zeta/x_zeta*                (1 + ((b_0**2)/(24*self.f*K) + (2-3*self.rho**2)/24*self.vov**2)*self.T_expiry)
-
-
-# In[13]:
-
 
 class SABR_Goes_Normal_N(SABR_Goes_Normal):
     """SABR model with beta = 0 and ajusted sigma_0 to account for the actual local vol.
@@ -891,10 +972,6 @@ class SABR_Goes_Normal_N(SABR_Goes_Normal):
 # In regular SABR, beta controls the backbone shape. Standard market practices are to have beta close to 1 in low rates environment (lognormal SABR) and closer to 0 when rates hike (normal SABR). 
 # 
 # tanh(x) has a unit slope close to zero and flattens for larger x, so using it as a local vol function allows to dynamically mirror the remarking of beta as rates move. Moreover, it yields closed-form vol expansion in Hagan's formula
-
-# In[14]:
-
-
 class SABR_tanh_base_model(Vol_model):
     """Generic class for SABR_tanh model
     dX_t = s_t*C(X_t)*dW_t
@@ -952,10 +1029,6 @@ class SABR_tanh_base_model(Vol_model):
     def smile_func(self, K):
         pass
 
-
-# In[15]:
-
-
 class SABR_tanh_LN(SABR_tanh_base_model):
     """SABR_tanh model using lognormal implied vol quoting
     """
@@ -998,10 +1071,6 @@ class SABR_tanh_LN(SABR_tanh_base_model):
             x_zeta = np.log((np.sqrt(q_zeta)-self.rho+zeta)/(1-self.rho))
             return self.sigma_0*log_moneyness/denom*zeta/x_zeta        *(1          +((2*gamma_2-gamma_1**2+1/(f_avg**2))/24*self.sigma_0**2*C_f_avg_adj**2           +0.25*self.rho*self.vov*self.sigma_0*gamma_1*C_f_avg_adj           +(2-3*self.rho**2)/24*self.vov**2)          *self.T_expiry)
 
-
-# In[16]:
-
-
 class SABR_tanh_N(SABR_tanh_base_model):
     """SABR_tanh model using lognormal implied vol quoting
     """
@@ -1043,10 +1112,6 @@ class SABR_tanh_N(SABR_tanh_base_model):
             q_zeta = 1-2*self.rho*zeta+zeta**2
             x_zeta = np.log((np.sqrt(q_zeta)-self.rho+zeta)/(1-self.rho))
             return self.sigma_0*(self.f-K)/denom*zeta/x_zeta        *(1          +((2*gamma_2-gamma_1**2)/24*self.sigma_0**2*C_f_avg_adj**2           +0.25*self.rho*self.vov*self.sigma_0*gamma_1*C_f_avg_adj           +(2-3*self.rho**2)/24*self.vov**2)          *self.T_expiry)
-
-
-# In[17]:
-
 
 class SABR_AS_base_model(Vol_model):
     """Generic class for SABR_tanh model
@@ -1113,10 +1178,6 @@ class SABR_AS_base_model(Vol_model):
     def smile_func(self, K):
         pass
 
-
-# In[18]:
-
-
 class SABR_AS_LN(SABR_AS_base_model):
     """SABR_AS model using lognormal implied vol quoting
     """
@@ -1161,10 +1222,6 @@ class SABR_AS_LN(SABR_AS_base_model):
             q_zeta = 1-2*self.rho*zeta+zeta**2
             x_zeta = np.log((np.sqrt(q_zeta)-self.rho+zeta)/(1-self.rho))
             return self.sigma_0*log_moneyness/denom*zeta/x_zeta        *(1          +((2*gamma_2-gamma_1**2+1/(f_avg**2))/24*self.sigma_0**2*C_f_avg_adj**2           +0.25*self.rho*self.vov*self.sigma_0*gamma_1*C_f_avg_adj           +(2-3*self.rho**2)/24*self.vov**2)          *self.T_expiry)
-
-
-# In[19]:
-
 
 class SABR_AS_N(SABR_AS_base_model):
     """SABR_AS model using lognormal implied vol quoting
