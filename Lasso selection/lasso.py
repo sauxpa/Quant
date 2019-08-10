@@ -172,11 +172,12 @@ class Lasso():
         plt.show()
 
     def lasso_path(self,
-                   n_l1_strength=10,
-                   l1_min=0.001,
-                   l1_max=0.001,
-                   plot_path=False,
-                   plot_active_features_path=False,
+                   n_l1_strength: int=10,
+                   l1_min: float=0.001,
+                   l1_max:float =0.001,
+                   plot_path: bool=False,
+                   plot_active_features_path: bool=False,
+                   add_legend: bool=False,
                   ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Lasso regularization path
         l1_strength_grid covers [l1_min, l1_max] in a logarithmic scale,
@@ -195,18 +196,19 @@ class Lasso():
         active_features_path = np.array(active_features_path)
         
         if plot_path:
-            fig, ax = plt.subplots(figsize=(17, 11), nrows=1, ncols=1)
+            fig, ax = plt.subplots(nrows=1, ncols=1)
             for i, theta in enumerate(path):
                 ax.plot(l1_strength_grid, theta, label='Feature {}'.format(i+1))
                 ax.scatter(l1_strength_grid, theta, marker='.')
             ax.set_xlabel('l1 strength')
             ax.set_ylabel(r'$\theta$ coefficients')
-            ax.legend(loc='lower right')
+            if add_legend:
+                ax.legend(loc='lower right')
             plt.tight_layout()
             plt.show()
 
         if plot_active_features_path:
-            fig, ax = plt.subplots(figsize=(17, 11), nrows=1, ncols=1)
+            fig, ax = plt.subplots(nrows=1, ncols=1)
             ax.plot(l1_strength_grid, active_features_path)
             ax.set_xlabel('l1 strength')
             ax.set_ylabel('Number of active features')
