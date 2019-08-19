@@ -24,7 +24,8 @@ class Ito_diffusion(abc.ABC):
                  scheme_steps: int=100, 
                  barrier=None, 
                  barrier_condition=None,
-                 noise_params: defaultdict=defaultdict(int)
+                 noise_params: defaultdict=defaultdict(int),
+                 jump_params: defaultdict=defaultdict(int),
                 ) -> None:
         self._x0 = x0
         self._T = T
@@ -32,6 +33,7 @@ class Ito_diffusion(abc.ABC):
         self._barrier = barrier
         self._barrier_condition = barrier_condition
         self._noise_params = noise_params
+        self._jump_params = jump_params
         
         noise_type = self._noise_params['type']
         # if a Hurst index is specified but is equal to 0.5
@@ -137,6 +139,29 @@ class Ito_diffusion(abc.ABC):
     def noise(self):
         return self._noise
         
+    @property
+    def jump_params(self) -> defaultdict:
+        return self._jump_params
+    @jump_params.setter
+    def jump_params(self, new_jump_params) -> None:
+        self._jump_params = new_jump_params
+    
+    @property
+    def has_jumps(self):
+        return len(self.jump_params)>0
+    
+    @property
+    def jump_intensity_func(self):
+        """scipy.stats distribution
+        """
+        return self.jump_params['jump_intensity_func']
+    
+    @property
+    def jump_size_distr(self):
+        """scipy.stats distribution
+        """
+        return self.jump_params['jump_size_distr']
+    
     @property
     def scheme_step(self) -> float:
         return self.T/self.scheme_steps
