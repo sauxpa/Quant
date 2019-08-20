@@ -8,6 +8,8 @@ from scipy.optimize import minimize
 from scipy.integrate import quad
 from scipy.special import roots_hermitenorm, erfinv
 from scipy.stats import iqr
+import statsmodels.api as sm
+from statsmodels.robust import mad
 from functools import lru_cache
 
 class OU_fitter(abc.ABC):
@@ -22,7 +24,7 @@ class OU_fitter(abc.ABC):
                  init_min: list=[],
                  init_max: list=[],
                  integration_mode: str='hermite',
-                 hist_vol_mode: str='robust',
+                 hist_vol_mode: str='mad',
                  n_quadrature: int=10,
                  regularization: float=0.0
                 ) -> None:
@@ -56,8 +58,9 @@ class OU_fitter(abc.ABC):
         self._integration_mode = integration_mode
         
         # estimation method for historic vol : 'standard' computes the variance
-        # of the time scaled increments, 'robust' uses interquantile range (more
-        # robust to outliers, in particular robust to jumps)
+        # of the time scaled increments, 'iqr' uses interquantile range (more
+        # robust to outliers, in particular robust to jumps), 'mad' uses the median
+        # absolute deviation
         self._hist_vol_mode = hist_vol_mode
         
         # in Hermite-Gauss mode, number of points for quadrature
@@ -201,8 +204,10 @@ class OU_fitter(abc.ABC):
         """
         if self.hist_vol_mode == 'std':
             return self.df_inc_normalized.std()[0]
-        elif self.hist_vol_mode == 'robust':
+        elif self.hist_vol_mode == 'iqr':
             return iqr(self.df_inc_normalized)/(2*np.sqrt(2)*erfinv(0.5))
+        elif self.hist_vol_mode == 'mad':
+            return mad(self.df_inc_normalized)[0]
         else:
             raise NameError('Unknown historical vol estimation mode : {}'.format(self.hist_vol_mode))
 
@@ -213,8 +218,14 @@ class OU_fitter(abc.ABC):
             * long_term : mean value of the process
             * vol : time-scaled standard deviation of returns 
         """
+        x = np.array(self.df_scaled)
+        y = np.array(self.df_inc)
+        x = sm.add_constant(x)
+        model = sm.OLS(y, x)
+        results = model.fit()
         return [
-                -np.linalg.lstsq(self.df_scaled, self.df_inc, rcond=None)[0][0][0],
+#                 -np.linalg.lstsq(self.df_scaled, self.df_inc, rcond=None)[0][0][0],
+                -results.params[1],
                 self.df.mean()[0],
                 self.vol_estimate(),
                ]

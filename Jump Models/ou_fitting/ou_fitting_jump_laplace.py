@@ -18,7 +18,7 @@ class OU_jump_Laplace_fitter(OU_fitter):
                  init_min: list=[1.0, -1.0, 0.1, 0.05, 0.05],
                  init_max: list=[10.0, 1.0, 1.0, 1.0, 5.0],
                  integration_mode: str='hermite',
-                 hist_vol_mode: str='robust',
+                 hist_vol_mode: str='mad',
                  n_quadrature: int=10,                 
                 ) -> None:
     
@@ -60,7 +60,7 @@ class OU_jump_only_Laplace_fitter(OU_fitter):
                  init_min: list=[0.05, 0.05],
                  init_max: list=[1.0, 5.0],
                  integration_mode: str='hermite',
-                 hist_vol_mode: str='robust',
+                 hist_vol_mode: str='mad',
                  n_quadrature: int=10,                 
                 ) -> None:
     
@@ -112,7 +112,7 @@ class OU_jump_Laplace_fixed_mr_fitter(OU_fitter):
                  init_min: list=[-1.0, 0.1, 0.05, 0.05],
                  init_max: list=[1.0, 1.0, 1.0, 5.0],
                  integration_mode: str='hermite',
-                 hist_vol_mode: str='robust',
+                 hist_vol_mode: str='mad',
                  n_quadrature: int=10,                 
                 ) -> None:
     
@@ -154,7 +154,7 @@ class OU_jump_Laplace_fixed_vol_fitter(OU_fitter):
                  init_min: list=[1.0, -1.0, 0.05, 0.05],
                  init_max: list=[10.0, 1.0, 1.0, 5.0],
                  integration_mode: str='hermite',
-                 hist_vol_mode: str='robust',
+                 hist_vol_mode: str='mad',
                  n_quadrature: int=10,                 
                 ) -> None:
     

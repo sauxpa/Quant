@@ -17,7 +17,7 @@ class OU_no_jump_fitter(OU_fitter):
                  init_min: list=[1.0, -1.0, 0.1],
                  init_max: list=[10.0, 1.0, 1.0],
                  integration_mode: str='hermite',
-                 hist_vol_mode: str='robust',
+                 hist_vol_mode: str='mad',
                  n_quadrature: int=10,
                 ) -> None:
     
@@ -59,7 +59,7 @@ class OU_no_jump_vol_fixed_fitter(OU_fitter):
                  init_min: list=[1.0, -1.0],
                  init_max: list=[10.0, 1.0],
                  integration_mode: str='hermite',
-                 hist_vol_mode: str='robust',
+                 hist_vol_mode: str='mad',
                  n_quadrature: int=10,
                 ) -> None:
     
