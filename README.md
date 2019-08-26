@@ -3,14 +3,18 @@
 ### Diffusion
 Libraries for stochastic processes simulation and visualization including:
 * Ito diffusion : Brownian motion, Geometric Brownian motion, Vasicek, CIR...
+* Jump processes : Ito diffusion driven by a Levy process i.e with a jump component with a given intensity and jump size distribution
 * Multidimensional processes, stochastic volatility diffusions (SABR...)
 * Fractional Brownian motion, Karhunen-Loeve expansion, fractional diffusions
 
 ### Hurst
-Estimation of Hurst exponent, a measure of geometric roughness of time series that encapsulates local mean-reversion or trend-following behaviours. Estimation on both simulated and real-world financial data at order book level.
+Estimation of Hurst exponent, a measure of geometric roughness of time series that encapsulates local mean-reversion or trend-following behaviours. Estimation on both simulated and real-world financial data at order book level (stocks, Bund, BTC...)
 
 ### Implied Vol
 Toy model for an option volatility marking tool using SVI parametrization.
+
+### Jump Models
+Fit a Ornstein-Uhlenbeck process (potentially with Laplace jumps) on historical data using the generalized methods of moments on the characteristic functon.
 
 ### Lasso selection
 Sparse replication of portfolio using Lasso variable selection.
