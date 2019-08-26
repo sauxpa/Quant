@@ -65,7 +65,7 @@ class Implied_vol():
         elif self._vol_type == 'N':
             return self.price_from_vol_N(vol, f, K, T_expiry, payoff=payoff)
                 
-    def vol_from_price(self, price, f, K, T_expiry, payoff='Call'): 
+    def vol_from_price(self, price, f, K, T_expiry, payoff='Call'):
         """
         Black-Scholes Call/Put implied volatility from price, the rest of the parameters (strike, rates, maturity) 
         are provided in the deal terms
@@ -77,7 +77,9 @@ class Implied_vol():
             implied_vol = brentq( partial( target_func, price ), 1e-6, 1.5 )
         except:
             print('Price: {}, strike: {}, payoff: {}'.format(price, K, payoff))
-
+        
+        return implied_vol
+    
 # ## Generic vol model
 # 
 # Handles option pricing and vol surface interpolation
@@ -202,10 +204,16 @@ class Vol_model(abc.ABC):
 
     @property
     def strike_grid(self):
-        return np.linspace(self.K_lo, self.K_hi, self.n_strikes)
+        if self.strike_type == 'strike':
+            return np.linspace(self.K_lo, self.K_hi, self.n_strikes)
+        else:
+            return list(map(lambda m: self.f*np.exp(m), self.logmoneyness_grid))
     @property
     def logmoneyness_grid(self):
-        return list(map(lambda K: np.log(K/self.f), self.strike_grid))
+        if self.strike_type == 'strike':
+            return list(map(lambda K: np.log(K/self.f), self.strike_grid))
+        else:
+            return np.linspace(self.moneyness_lo, self.moneyness_hi, self.n_strikes)
     
     @property
     def vol_type(self):
@@ -802,7 +810,7 @@ class SABR_MC(SABR_base_model):
         """Implied vol smile converted from option Monte Carlo prices
         K: strike
         """
-        if K <= self.ATM:
+        if K <= self.f:
             payoff = 'Put'
         else:
             payoff = 'Call'
@@ -882,7 +890,7 @@ class SABR_Goes_Normal(SABR_base_model):
         if payoff == "Call":
             return self.call_price(K)
         elif payoff == "Put":
-            return self.call_pric(K) + (K-self.f)
+            return self.call_price(K) + (K-self.f)
     
     def int_local_time(self, t, K):
         """Explicit form for the integral of the local time between 0 and t
