@@ -74,12 +74,10 @@ class Implied_vol():
             return self.price_from_vol(vol, f, K, T_expiry, payoff=payoff) - price 
                      
         try:
-            implied_vol = brentq( partial( target_func, price ), 1e-6, 1.5 )
+            return brentq( partial( target_func, price ), 1e-6, 1.5 )
         except:
             print('Price: {}, strike: {}, payoff: {}'.format(price, K, payoff))
         
-        return implied_vol
-    
 # ## Generic vol model
 # 
 # Handles option pricing and vol surface interpolation
