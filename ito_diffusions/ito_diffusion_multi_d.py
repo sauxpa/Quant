@@ -234,7 +234,7 @@ class SABR(Ito_diffusion_multi_d):
         """
         return np.array([[x[1]*(x[0])**self.beta, 0],                         [self.vov*x[1]*self.rho, self.vov*x[1]*self.rho_dual]])
 
-class SABR_AS(Ito_diffusion_multi_d):
+class SABR_AS_lognorm(Ito_diffusion_multi_d):
     """Instantiate Ito_diffusion to simulate a modified SABR with local spiky vol
     dX_t = s_t*C(X_t)*dW_t
     ds_t = vov*s_t*dB_t
@@ -318,6 +318,92 @@ class SABR_AS(Ito_diffusion_multi_d):
         """
         return np.array([[x[1]*np.exp(-self.c*np.log((x[0]+self.shift)/self.K_max)**2), 0],                         [self.vov*x[1]*self.rho, self.vov*x[1]*self.rho_dual]])
 
+class SABR_AS_loglogistic(Ito_diffusion_multi_d):
+    """Instantiate Ito_diffusion to simulate a modified SABR with local spiky vol
+    dX_t = s_t*C(X_t)*dW_t
+    ds_t = vov*s_t*dB_t
+    d<W,B>_t = rho*dt
+    C(x) = beta/alpha*(xs/alpha)^(beta-1)/(1+(*xs/alpha)^beta)^2
+    xs = x + shift
+    mode = alpha*((beta-1)/(beta+1))^(1-beta)
+    where shift, mode, beta, vov, rho are real numbers
+    """
+    def __init__(self, 
+                 x0: np.ndarray=np.array([1,1]), 
+                 T: float=1.0, 
+                 scheme_steps: int=100,
+                 keys=None,
+                 shift: float=0.0,
+                 mode: float=1.0,
+                 beta: float=1.0,
+                 vov: float=1.0, 
+                 rho: float=0.0,
+                 barrier: np.ndarray=np.full(1, None),
+                 barrier_condition: np.ndarray=np.full(1, None)
+                ) -> None: 
+        self._shift = np.float(shift)
+        self._mode = np.float(mode)
+        self._beta = np.float(beta)
+        self._vov = np.float(vov)
+        self._rho = np.float(rho)
+        n_factors = 2
+        super().__init__(x0=x0, 
+                         T=T, 
+                         scheme_steps=scheme_steps, 
+                         n_factors=n_factors,
+                         keys=keys, 
+                         barrier=barrier, 
+                         barrier_condition=barrier_condition
+                        )
+        
+    @property
+    def shift(self) -> float:
+        return self._shift
+    @shift.setter
+    def shift(self, new_shift: float) -> None:
+        self._shift = float(new_shift)
+    
+    @property
+    def mode(self) -> float:
+        return self._mode
+    @mode.setter
+    def mode(self, new_mode: float) -> None:
+        self._mode = float(new_mode)
+    
+    @property
+    def beta(self) -> float:
+        return self._beta
+    @beta.setter
+    def beta(self, new_beta: float) -> None:
+        self._beta = float(new_beta)
+        
+    @property
+    def rho(self) -> float:
+        return self._rho
+    @rho.setter
+    def rho(self, new_rho: float) -> None:
+        self._rho = new_rho
+        
+    @property
+    def vov(self) -> float:
+        return self._vov
+    @vov.setter
+    def vov(self, new_vov: float) -> None:
+        self._vov = new_vov
+    
+    @property
+    def rho_dual(self) -> float:
+        return np.sqrt(1-self.rho**2)
+        
+    def drift(self, t, x: np.ndarray) -> np.ndarray:
+        return np.zeros_like(x)
+    
+    def vol(self, t, x: np.ndarray) -> np.ndarray:
+        """Project dB onto dW and an orhtogonal white noise dZ
+        dB_t = rho*dW_t + sqrt(1-rho^2)*dZ_t
+        """
+        return np.array([[x[1]*np.exp(-self.c*np.log((x[0]+self.shift)/self.K_max)**2), 0],                         [self.vov*x[1]*self.rho, self.vov*x[1]*self.rho_dual]])
+    
 class SABR_tanh(Ito_diffusion_multi_d):
     """Instantiate Ito_diffusion to simulate a modified SABR with tanh local vol model
     dX_t = s_t*C(X_t)*dW_t
