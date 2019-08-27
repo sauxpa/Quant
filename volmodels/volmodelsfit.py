@@ -1,31 +1,27 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
-
-
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.optimize import root
 
-
-# In[2]:
-
-
 ONE_BP = 1e-4
 ONE_PCT = 1e-2
-
-
-# In[5]:
-
 
 class Fitter():
     """Wrapper for a model and a dataframe of market quoted volatilies.
     Calibrates the parameters of the model to fit the vol surface.
     Names of the parameters are inferred from init_params_map
     """
-    def __init__(self, model=None, f=None, T_expiry=None,                 init_params_map=dict(), df=None, tenor='1Y'):
+    def __init__(self, 
+                 model=None,
+                 f=None,
+                 T_expiry=None,
+                 init_params_map=dict(),
+                 df=None,
+                 tenor: str='1Y'
+                ) -> None:
         self._model = model
         self._f = f
         self._T_expiry = T_expiry
@@ -119,10 +115,3 @@ class Fitter():
             print('Success!') if sol.success else print('Failure!')
             print(sol.message)
         self._sol = dict(zip(self.init_params_map.keys(), sol.x))
-
-
-# In[ ]:
-
-
-
-
