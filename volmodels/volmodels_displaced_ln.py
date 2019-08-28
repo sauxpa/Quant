@@ -7,7 +7,7 @@ from volmodels import Vol_model, ONE_BP
 
 # Displaced lognormal
 # Pure local volatility model here
-class SLN_adjustable_backbone(Vol_model):
+class SLN_adjustable_backbone_local_vol(Vol_model):
     """Shifted lognormal model with adjustable backbone as developped 
     in Andersen and Piterbarg in (16.5):
     dF_t = sigma*(shift*F_t+(mixing-shift)*F_0+(1-m)*L)*dW_t
@@ -79,7 +79,7 @@ class SLN_adjustable_backbone(Vol_model):
     def smile_func(self, K):
         pass
 
-class SLN_adjustable_backbone_LN(SLN_adjustable_backbone):
+class SLN_adjustable_backbone_local_vol_LN(SLN_adjustable_backbone_local_vol):
     """Shifted lognormal model with adjustable backbone in lognormal quoting
     """
     def __init__(self, 
@@ -113,7 +113,7 @@ class SLN_adjustable_backbone_LN(SLN_adjustable_backbone):
         
     @property
     def model_name(self):
-        return 'SLN_adjustable_backbone_LN'
+        return 'SLN_adjustable_backbone_local_vol_LN'
     
     @property
     def ATM_LN(self):
@@ -137,3 +137,61 @@ class SLN_adjustable_backbone_LN(SLN_adjustable_backbone):
             gamma_1 = self.shift/local_vol_f_avg 
             
             return self.sigma*self.shift*log_moneyness/int_inv_local_vol        *(1+((1/(f_avg**2)-gamma_1**2)/24*(self.sigma**2)*(local_vol_f_avg**2))*self.T_expiry)
+        
+class SLN_adjustable_backbone_local_vol_N(SLN_adjustable_backbone_local_vol):
+    """Shifted lognormal model with adjustable backbone in normal quoting
+    """
+    def __init__(self, 
+                 sigma: float=1.0,
+                 shift: float=0.0,
+                 mixing: float=0.0,
+                 L: float=0.0,
+                 f=None, 
+                 T_expiry: float=1.0,
+                 logmoneyness_lo=None,
+                 logmoneyness_hi=None,
+                 K_lo=None,
+                 K_hi=None,
+                 strike_type: str='logmoneyness',
+                 n_strikes: int=50,
+                ) -> None:
+        super().__init__(sigma=sigma, 
+                         shift=shift,
+                         mixing=mixing,
+                         L=L,
+                         f=f, 
+                         T_expiry=T_expiry,
+                         vol_type='N',
+                         logmoneyness_lo=logmoneyness_lo,
+                         logmoneyness_hi=logmoneyness_hi,
+                         K_lo=K_lo,
+                         K_hi=K_hi,
+                         strike_type=strike_type,
+                         n_strikes=n_strikes,
+                        )
+        
+    @property
+    def model_name(self):
+        return 'SLN_adjustable_backbone_local_vol_N'
+    
+    @property
+    def ATM_N(self):
+        local_vol_f = self.mixing*self.f+(1-self.mixing)*self.L
+        return self.sigma*local_vol_f*(1+1/24*((-(self.shift/local_vol_f)**2)*(self.sigma**2)*(local_vol_f**2))*self.T_expiry)
+        
+    @property
+    def ATM(self):
+        return self.ATM_N
+    
+    def smile_func(self, K):
+        """Implied vol is the harmonic average of local vol on the path F_0 -> K
+        """
+        if np.abs(K-self.f)<ONE_BP/100:
+            return self.ATM
+        else:
+            f_avg = np.sqrt(self.f*K)
+            int_inv_local_vol = np.log((self.mixing*self.f + (1-self.mixing)*self.L)/(self.shift*K + (self.mixing-self.shift)*self.f + (1-self.mixing)*self.L))
+            local_vol_f_avg = self.shift*f_avg + (self.mixing-self.shift)*self.f + (1-self.mixing)*self.L
+            gamma_1 = self.shift/local_vol_f_avg 
+            
+            return self.sigma*self.shift*(self.f-K)/int_inv_local_vol*(1 + (-gamma_1**2/24*(self.sigma**2)*(local_vol_f_avg**2))*self.T_expiry)        
