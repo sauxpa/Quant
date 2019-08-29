@@ -8,11 +8,11 @@ from scipy.integrate import quad
 from functools import partial
 import abc
 
-class BS_Markov_simple(Vol_model):
-    """Black-Scholes model with latent Markov volatility.
+class Bachelier_Markov_simple(Vol_model):
+    """Bachelier model with latent Markov volatility.
     The process starts with volatility sigma_0 and randomly 
     jumps to sigma_1 with intensity lambda. The call pricing formula
-    can be obtained by averaging standard Black-Scholes prices over the
+    can be obtained by averaging standard Bachelier prices over the
     exponential distribution of transition time from sigma_0 to sigma_1.
     """
     def __init__(self,
@@ -83,25 +83,13 @@ class BS_Markov_simple(Vol_model):
         """
         return self.sigma_0*np.sqrt(self.T_expiry)
     
-    def log_moneyness(self, K: float) -> float:
-        return np.log(self.f/K)
-    
-    def d1(self, K: float, t: float) -> float:
-        return 1/self.total_std(t)*self.log_moneyness(K)+0.5*self.total_std(t)
-    
-    def d2(self, K: float, t: float) -> float:
-        return 1/self.total_std(t)*self.log_moneyness(K)-0.5*self.total_std(t)
-
-    def d01(self, K: float) -> float:
-        return 1/self.total_std_0*self.log_moneyness(K)+0.5*self.total_std_0
-    def d02(self, K: float) -> float:
-        return 1/self.total_std_0*self.log_moneyness(K)-0.5*self.total_std_0
-
     def integrand(self, K: float, t: float) -> float:
-        return (self.f*norm.cdf(self.d1(K, t)) - K*norm.cdf(self.d2(K, t)))*self.lambda_*np.exp(-self.lambda_*t)
+        d = (self.f-K)/self.total_std(t)
+        return ((self.f-K)*norm.cdf(d) + self.total_std(t)*norm.pdf(d))*self.lambda_*np.exp(-self.lambda_*t)
 
     def remainder(self, K: float) -> float:
-        return (self.f * norm.cdf(self.d01(K)) - K * norm.cdf(self.d02(K))) * np.exp(-self.lambda_*self.T_expiry)
+        d0 = (self.f-K)/self.total_std_0
+        return ((self.f-K)*norm.cdf(d0) + self.total_std_0*norm.pdf(d0)) * np.exp(-self.lambda_*self.T_expiry)
     
     def option_price(self, K: float, payoff: str='Call') -> float:
         """Returns the call/put price.
@@ -116,10 +104,10 @@ class BS_Markov_simple(Vol_model):
         over the exponential distribution of vol transition time.
         """
         f = partial(self.integrand, K)
-        return quad(f, 0.0, self.T_expiry)[0]+self.remainder(K)
+        return quad(f, 0.0, self.T_expiry)[0]+self.remainder(K)    
     
-class BS_Markov_simple_LN(BS_Markov_simple):
-    """Black-Scholes with latent Markov volatility in lognormal quoting.
+class Bachelier_Markov_simple_LN(Bachelier_Markov_simple):
+    """Bachelier with latent Markov volatility in lognormal quoting.
     """
     def __init__(self, 
                  sigma_0: float=1.0, 
@@ -151,7 +139,7 @@ class BS_Markov_simple_LN(BS_Markov_simple):
     
     @property
     def model_name(self) -> str:
-        return 'BS_Markov_simple_LN'
+        return 'Bachelier_Markov_simple_LN'
     
     @property
     def ATM_LN(self) -> float:
@@ -171,10 +159,10 @@ class BS_Markov_simple_LN(BS_Markov_simple):
             payoff = 'Call'
             
         price = self.option_price(K, payoff=payoff)
-        return self.IV.vol_from_price(price, self.f, K, self.T_expiry, payoff=payoff)
+        return self.IV.vol_from_price(price, self.f, K, self.T_expiry, payoff=payoff)   
     
-class BS_Markov_simple_N(BS_Markov_simple):
-    """Black-Scholes with latent Markov volatility in normal quoting.
+class Bachelier_Markov_simple_N(Bachelier_Markov_simple):
+    """Bachelier with latent Markov volatility in normal quoting.
     """
     def __init__(self, 
                  sigma_0: float=1.0, 
@@ -206,10 +194,10 @@ class BS_Markov_simple_N(BS_Markov_simple):
     
     @property
     def model_name(self) -> str:
-        return 'BS_Markov_simple_N'
+        return 'Bachelier_Markov_simple_N'
     
     @property
-    def ATM_LN(self) -> float:
+    def ATM_N(self) -> float:
         return self.smile_func(self.f)
         
     @property
@@ -226,13 +214,13 @@ class BS_Markov_simple_N(BS_Markov_simple):
             payoff = 'Call'
             
         price = self.option_price(K, payoff=payoff)
-        return self.IV.vol_from_price(price, self.f, K, self.T_expiry, payoff=payoff)    
+        return self.IV.vol_from_price(price, self.f, K, self.T_expiry, payoff=payoff)
     
-class BS_Markov(Vol_model):
-    """Black-Scholes model with latent Markov volatility.
+class Bachelier_Markov(Vol_model):
+    """Bachelier model with latent Markov volatility.
     The process starts with volatility sigma_0 and randomly 
     jumps to sigma_1 with intensity lambda. The call pricing formula
-    can be obtained by averaging standard Black-Scholes prices over the
+    can be obtained by averaging standard Bachelier prices over the
     exponential distribution of transition time from sigma_0 to sigma_1.
     """
     def __init__(self,
@@ -317,25 +305,13 @@ class BS_Markov(Vol_model):
         """
         return self.sigma_0*np.sqrt(self.T_expiry)
     
-    def log_moneyness(self, K: float) -> float:
-        return np.log(self.f/K)
-    
-    def d1(self, sigma_next: float, K: float, t: float) -> float:
-        return 1/self.total_std(sigma_next,t)*self.log_moneyness(K)+0.5*self.total_std(sigma_next,t)
-    
-    def d2(self, sigma_next: float, K: float, t: float) -> float:
-        return 1/self.total_std(sigma_next,t)*self.log_moneyness(K)-0.5*self.total_std(sigma_next,t)
-    
-    def d01(self, K: float) -> float:
-        return 1/self.total_std_0*self.log_moneyness(K)+0.5*self.total_std_0
-    def d02(self, K: float) -> float:
-        return 1/self.total_std_0*self.log_moneyness(K)-0.5*self.total_std_0
-
     def integrand(self, sigma_next: float, lambda_next: float, K: float, t: float) -> float:
-        return (self.f * norm.cdf(self.d1(sigma_next, K, t)) - K * norm.cdf(self.d2(sigma_next, K, t)))*lambda_next*np.exp(-lambda_next*t)
+        d = (self.f-K)/self.total_std(sigma_next, t)
+        return ((self.f-K)*norm.cdf(d) + self.total_std(sigma_next, t)*norm.pdf(d))*lambda_next*np.exp(-lambda_next*t)
 
     def remainder(self, lambda_next: float, K: float) -> float:
-        return (self.f * norm.cdf(self.d01(K)) - K * norm.cdf(self.d02(K))) * np.exp(-lambda_next*self.T_expiry)
+        d0 = (self.f-K)/self.total_std_0
+        return ((self.f-K)*norm.cdf(d0) + self.total_std_0*norm.pdf(d0))*np.exp(-lambda_next*self.T_expiry)
     
     def option_price(self, K, payoff='Call'):
         """Returns the call/put price.
@@ -346,15 +322,15 @@ class BS_Markov(Vol_model):
             return self.call_price(K) + (K-self.f)
     
     def call_price(self, K):
-        """Returns the call price obtained by averaging the BS call prices
+        """Returns the call price obtained by averaging the Bachelier call prices
         over the exponential distribution of vol transition time.
-        Given the volatility can only jump once, the call price is the average of the call price under BS_Markov_Simple for each couple (sigma_i, lambda_i), weighted by the probability that the jump to sigma_i is the first to occur. Markov chain property gives that the transition time are independent and follow exponential distributions, thus the probability that the jump to sigma_i occurs first is proportional to lambda_i.
+        Given the volatility can only jump once, the call price is the average of the call price under Bachelier_Markov_Simple for each couple (sigma_i, lambda_i), weighted by the probability that the jump to sigma_i is the first to occur. Markov chain property gives that the transition time are independent and follow exponential distributions, thus the probability that the jump to sigma_i occurs first is proportional to lambda_i.
         """
         prices = np.array(list(map(lambda param: quad(partial(self.integrand, param[0], param[1], K), 0.0, self.T_expiry)[0]+self.remainder(param[1], K), zip(self.sigmas, self.lambdas))))
-        return np.dot(np.array(self.lambdas)/self.lambda_sum, prices)
-                          
-class BS_Markov_LN(BS_Markov):
-    """Black-Scholes with latent Markov volatility in lognormal quoting.
+        return np.dot(np.array(self.lambdas)/self.lambda_sum, prices)    
+    
+class Bachelier_Markov_LN(Bachelier_Markov):
+    """Bachelier with latent Markov volatility in lognormal quoting.
     """
     def __init__(self, 
                  sigma_0: float=1.0,
@@ -385,15 +361,15 @@ class BS_Markov_LN(BS_Markov):
                         )
     
     @property
-    def model_name(self) -> str:
-        return 'BS_Markov_LN'
+    def model_name(self):
+        return 'Bachelier_Markov_LN'
     
     @property
-    def ATM_LN(self) -> float:
+    def ATM_LN(self):
         return self.smile_func(self.f)
         
     @property
-    def ATM(self) -> float:
+    def ATM(self):
         return self.ATM_LN
     
     def smile_func(self, K):
@@ -408,8 +384,8 @@ class BS_Markov_LN(BS_Markov):
         price = self.option_price(K, payoff=payoff)
         return self.IV.vol_from_price(price, self.f, K, self.T_expiry, payoff=payoff)
     
-class BS_Markov_N(BS_Markov):
-    """Black-Scholes with latent Markov volatility in lognormal quoting.
+class Bachelier_Markov_N(Bachelier_Markov):
+    """Bachelier with latent Markov volatility in normal quoting.
     """
     def __init__(self, 
                  sigma_0: float=1.0,
@@ -440,15 +416,15 @@ class BS_Markov_N(BS_Markov):
                         )
     
     @property
-    def model_name(self) -> str:
-        return 'BS_Markov_N'
+    def model_name(self):
+        return 'Bachelier_Markov_N'
     
     @property
-    def ATM_LN(self) -> float:
+    def ATM_N(self):
         return self.smile_func(self.f)
         
     @property
-    def ATM(self) -> float:
+    def ATM(self):
         return self.ATM_N
     
     def smile_func(self, K):
