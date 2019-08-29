@@ -3,8 +3,8 @@
 
 import numpy as np
 from volmodels import Implied_vol, Vol_model
+from scipy.stats import norm
 from scipy.integrate import quad
-from scipy.special import erf
 from functools import partial
 import abc
 
@@ -65,43 +65,33 @@ class BS_Markov_simple(Vol_model):
     def lambda_(self, new_lambda_: float) -> None:
         self._lambda_ = new_lambda_
         
-    def __str__(self):
+    def __str__(self) -> str:
         return r'$\sigma_0$={:.2%}, $\sigma_1$={:.2%}, $\lambda$={:.2%}, f={:.2%}'.format(self.sigma_0, self.sigma_1, self.lambda_, self.f)
     
     @abc.abstractmethod
-    def smile_func(self, K):
+    def smile_func(self, K: float) -> float:
         pass
     
-    def N(self, x: float) -> float:
-        return 0.5*(1+erf(x/np.sqrt(2)))
+    @abc.abstractmethod
+    def integrand(self, K: float, t: float) -> float:
+        pass
     
-    def log_moneyness(self, K: float) -> float:
-        return np.log(self.f/K)
+    @abc.abstractmethod
+    def remainder(self, K: float) -> float:
+        pass
     
-    def d1(self, K: float, t: float) -> float:
-        total_std = np.sqrt(self.sigma_1**2*self.T_expiry + (self.sigma_0**2-self.sigma_1**2)*t)
-        return 1/total_std*self.log_moneyness(K)+0.5*total_std
+    def total_std(self, t: float) -> float:
+        """Total standard deviation between 0 and T_expiry with a vol switch at t
+        """
+        return np.sqrt(self.sigma_1**2*self.T_expiry + (self.sigma_0**2-self.sigma_1**2)*t)
     
-    def d2(self, K: float, t: float) -> float:
-        total_std = np.sqrt(self.sigma_1**2*self.T_expiry + (self.sigma_0**2-self.sigma_1**2)*t)
-        return 1/total_std*self.log_moneyness(K)-0.5*total_std
-
     @property
     def total_std_0(self) -> float:
+        """Total standard deviation between 0 and T_expiry assuming no vol switch
+        """
         return self.sigma_0*np.sqrt(self.T_expiry)
     
-    def d01(self, K: float) -> float:
-        return 1/self.total_std_0*self.log_moneyness(K)+0.5*self.total_std_0
-    def d02(self, K: float) -> float:
-        return 1/self.total_std_0*self.log_moneyness(K)-0.5*self.total_std_0
-
-    def integrand(self, K: float, t: float) -> float:
-        return (self.f * self.N(self.d1(K, t)) - K * self.N(self.d2(K, t)))*self.lambda_*np.exp(-self.lambda_*t)
-
-    def remainder(self, K: float) -> float:
-        return (self.f * self.N(self.d01(K)) - K * self.N(self.d02(K))) * np.exp(-self.lambda_*self.T_expiry)
-    
-    def option_price(self, K, payoff='Call'):
+    def option_price(self, K: float, payoff: str='Call') -> float:
         """Returns the call/put price.
         """
         if payoff == "Call":
@@ -109,7 +99,7 @@ class BS_Markov_simple(Vol_model):
         elif payoff == "Put":
             return self.call_price(K) + (K-self.f)
     
-    def call_price(self, K):
+    def call_price(self, K: float) -> float:
         """Returns the call price obtained by averaging the BS call prices
         over the exponential distribution of vol transition time.
         """
@@ -148,16 +138,36 @@ class BS_Markov_simple_LN(BS_Markov_simple):
                         )
     
     @property
-    def model_name(self):
+    def model_name(self) -> str:
         return 'BS_Markov_simple_LN'
     
     @property
-    def ATM_LN(self):
+    def ATM_LN(self) -> float:
         return self.smile_func(self.f)
         
     @property
-    def ATM(self):
+    def ATM(self) -> float:
         return self.ATM_LN
+    
+    def log_moneyness(self, K: float) -> float:
+        return np.log(self.f/K)
+    
+    def d1(self, K: float, t: float) -> float:
+        return 1/self.total_std(t)*self.log_moneyness(K)+0.5*self.total_std(t)
+    
+    def d2(self, K: float, t: float) -> float:
+        return 1/self.total_std(t)*self.log_moneyness(K)-0.5*self.total_std(t)
+
+    def d01(self, K: float) -> float:
+        return 1/self.total_std_0*self.log_moneyness(K)+0.5*self.total_std_0
+    def d02(self, K: float) -> float:
+        return 1/self.total_std_0*self.log_moneyness(K)-0.5*self.total_std_0
+
+    def integrand(self, K: float, t: float) -> float:
+        return (self.f*norm.cdf(self.d1(K, t)) - K*norm.cdf(self.d2(K, t)))*self.lambda_*np.exp(-self.lambda_*t)
+
+    def remainder(self, K: float) -> float:
+        return (self.f * norm.cdf(self.d01(K)) - K * norm.cdf(self.d02(K))) * np.exp(-self.lambda_*self.T_expiry)
     
     def smile_func(self, K):
         """Implied vol smile converted from option prices
@@ -171,6 +181,68 @@ class BS_Markov_simple_LN(BS_Markov_simple):
         price = self.option_price(K, payoff=payoff)
         return self.IV.vol_from_price(price, self.f, K, self.T_expiry, payoff=payoff)
     
+class BS_Markov_simple_N(BS_Markov_simple):
+    """Black-Scholes with latent Markov volatility in normal quoting.
+    """
+    def __init__(self, 
+                 sigma_0: float=1.0, 
+                 sigma_1: float=1.0, 
+                 lambda_: float=0.0, 
+                 f=None,
+                 T_expiry: float=1.0,
+                 logmoneyness_lo=None,
+                 logmoneyness_hi=None,
+                 K_lo=None,
+                 K_hi=None,
+                 strike_type: str='logmoneyness',
+                 n_strikes: int=50,
+                ) -> None:
+            
+            super().__init__(f=f,
+                             sigma_0=sigma_0,
+                             sigma_1=sigma_1,
+                             lambda_=lambda_,
+                             T_expiry=T_expiry,
+                             vol_type='N',
+                             logmoneyness_lo=logmoneyness_lo,
+                             logmoneyness_hi=logmoneyness_hi,
+                             K_lo=K_lo,
+                             K_hi=K_hi,
+                             strike_type=strike_type,
+                             n_strikes=n_strikes,
+                        )
+    
+    @property
+    def model_name(self) -> str:
+        return 'BS_Markov_simple_N'
+    
+    @property
+    def ATM_N(self) -> float:
+        return self.smile_func(self.f)
+        
+    @property
+    def ATM(self) -> float:
+        return self.ATM_N
+    
+    def integrand(self, K: float, t: float) -> float:
+        d = (self.f-K)/self.total_std(t)
+        return ((self.f-K)*norm.cdf(d) + self.total_std(t)*norm.pdf(d))*self.lambda_*np.exp(-self.lambda_*t)
+
+    def remainder(self, K: float) -> float:
+        d0 = (self.f-K)/self.total_std_0
+        return ((self.f-K)*norm.cdf(d0) + self.total_std_0*norm.pdf(d0)) * np.exp(-self.lambda_*self.T_expiry)
+    
+    def smile_func(self, K):
+        """Implied vol smile converted from option prices
+        K: strike
+        """
+        if K < self.f:
+            payoff = 'Put'
+        else:
+            payoff = 'Call'
+            
+        price = self.option_price(K, payoff=payoff)
+        return self.IV.vol_from_price(price, self.f, K, self.T_expiry, payoff=payoff)
     
 class BS_Markov(Vol_model):
     """Black-Scholes model with latent Markov volatility.
@@ -250,34 +322,24 @@ class BS_Markov(Vol_model):
     def smile_func(self, K):
         pass
     
-    def N(self, x: float) -> float:
-        return 0.5*(1+erf(x/np.sqrt(2)))
+    @abc.abstractmethod
+    def integrand(self, K: float, t: float) -> float:
+        pass
     
-    def log_moneyness(self, K: float) -> float:
-        return np.log(self.f/K)
+    @abc.abstractmethod
+    def remainder(self, K: float) -> float:
+        pass
     
-    def d1(self, sigma_next: float, K: float, t: float) -> float:
-        total_std = np.sqrt(sigma_next**2*self.T_expiry + (self.sigma_0**2-sigma_next**2)*t)
-        return 1/total_std*self.log_moneyness(K)+0.5*total_std
+    def total_std(self, sigma_next: float, t: float) -> float:
+        """Total standard deviation between 0 and T_expiry with a vol switch at t
+        """
+        return np.sqrt(sigma_next**2*self.T_expiry + (self.sigma_0**2-sigma_next**2)*t)
     
-    def d2(self, sigma_next: float, K: float, t: float) -> float:
-        total_std = np.sqrt(sigma_next**2*self.T_expiry + (self.sigma_0**2-sigma_next**2)*t)
-        return 1/total_std*self.log_moneyness(K)-0.5*total_std
-
     @property
     def total_std_0(self) -> float:
+        """Total standard deviation between 0 and T_expiry assuming no vol switch
+        """
         return self.sigma_0*np.sqrt(self.T_expiry)
-    
-    def d01(self, K: float) -> float:
-        return 1/self.total_std_0*self.log_moneyness(K)+0.5*self.total_std_0
-    def d02(self, K: float) -> float:
-        return 1/self.total_std_0*self.log_moneyness(K)-0.5*self.total_std_0
-
-    def integrand(self, sigma_next: float, lambda_next: float, K: float, t: float) -> float:
-        return (self.f * self.N(self.d1(sigma_next, K, t)) - K * self.N(self.d2(sigma_next, K, t)))*lambda_next*np.exp(-lambda_next*t)
-
-    def remainder(self, lambda_next: float, K: float) -> float:
-        return (self.f * self.N(self.d01(K)) - K * self.N(self.d02(K))) * np.exp(-lambda_next*self.T_expiry)
     
     def option_price(self, K, payoff='Call'):
         """Returns the call/put price.
@@ -327,8 +389,83 @@ class BS_Markov_LN(BS_Markov):
                         )
     
     @property
-    def model_name(self):
+    def model_name(self) -> str:
         return 'BS_Markov_LN'
+    
+    @property
+    def ATM_LN(self) -> float:
+        return self.smile_func(self.f)
+        
+    @property
+    def ATM(self) -> float:
+        return self.ATM_LN
+    
+    def log_moneyness(self, K: float) -> float:
+        return np.log(self.f/K)
+    
+    def d1(self, sigma_next: float, K: float, t: float) -> float:
+        return 1/self.total_std(sigma_next,t)*self.log_moneyness(K)+0.5*self.total_std(sigma_next,t)
+    
+    def d2(self, sigma_next: float, K: float, t: float) -> float:
+        return 1/self.total_std(sigma_next,t)*self.log_moneyness(K)-0.5*self.total_std(sigma_next,t)
+    
+    def d01(self, K: float) -> float:
+        return 1/self.total_std_0*self.log_moneyness(K)+0.5*self.total_std_0
+    def d02(self, K: float) -> float:
+        return 1/self.total_std_0*self.log_moneyness(K)-0.5*self.total_std_0
+
+    def integrand(self, sigma_next: float, lambda_next: float, K: float, t: float) -> float:
+        return (self.f * norm.cdf(self.d1(sigma_next, K, t)) - K * norm.cdf(self.d2(sigma_next, K, t)))*lambda_next*np.exp(-lambda_next*t)
+
+    def remainder(self, lambda_next: float, K: float) -> float:
+        return (self.f * norm.cdf(self.d01(K)) - K * norm.cdf(self.d02(K))) * np.exp(-lambda_next*self.T_expiry)
+    
+    def smile_func(self, K):
+        """Implied vol smile converted from option prices
+        K: strike
+        """
+        if K < self.f:
+            payoff = 'Put'
+        else:
+            payoff = 'Call'
+            
+        price = self.option_price(K, payoff=payoff)
+        return self.IV.vol_from_price(price, self.f, K, self.T_expiry, payoff=payoff)
+    
+class BS_Markov_N(BS_Markov):
+    """Black-Scholes with latent Markov volatility in normal quoting.
+    """
+    def __init__(self, 
+                 sigma_0: float=1.0,
+                 sigmas: list=[], 
+                 lambdas: list=[], 
+                 f=None,
+                 T_expiry: float=1.0,
+                 logmoneyness_lo=None,
+                 logmoneyness_hi=None,
+                 K_lo=None,
+                 K_hi=None,
+                 strike_type: str='logmoneyness',
+                 n_strikes: int=50,
+                ) -> None:
+
+            super().__init__(f=f,
+                             sigma_0=sigma_0,
+                             sigmas=sigmas,
+                             lambdas=lambdas,
+                             T_expiry=T_expiry,
+                             vol_type='N',
+                             logmoneyness_lo=logmoneyness_lo,
+                             logmoneyness_hi=logmoneyness_hi,
+                             K_lo=K_lo,
+                             K_hi=K_hi,
+                             strike_type=strike_type,
+                             n_strikes=n_strikes,
+                        )
+    
+    @property
+    def model_name(self):
+        return 'BS_Markov_N'
     
     @property
     def ATM_LN(self):
@@ -336,7 +473,15 @@ class BS_Markov_LN(BS_Markov):
         
     @property
     def ATM(self):
-        return self.ATM_LN
+        return self.ATM_N
+    
+    def integrand(self, sigma_next: float, lambda_next: float, K: float, t: float) -> float:
+        d = (self.f-K)/self.total_std(sigma_next, t)
+        return ((self.f-K)*norm.cdf(d) + self.total_std(sigma_next, t)*norm.pdf(d))*lambda_next*np.exp(-lambda_next*t)
+
+    def remainder(self, lambda_next: float, K: float) -> float:
+        d0 = (self.f-K)/self.total_std_0
+        return ((self.f-K)*norm.cdf(d0) + self.total_std_0*norm.pdf(d0))*np.exp(-lambda_next*self.T_expiry)
     
     def smile_func(self, K):
         """Implied vol smile converted from option prices
