@@ -2,13 +2,13 @@
 # coding: utf-8
 
 import numpy as np
-from volmodels import Implied_vol, Vol_model
+from volmodels import Latent_Markov_Vol_simple, Latent_Markov_Vol
 from scipy.integrate import quad
 from scipy.stats import norm
 from functools import partial
 import abc
 
-class SLN_Markov_simple(Vol_model):
+class SLN_Markov_simple(Latent_Markov_Vol_simple):
     """Shifted lognormal model with latent Markov volatility.
     The process starts with volatility sigma_0 and randomly 
     jumps to sigma_1 with intensity lambda. The call pricing formula
@@ -19,7 +19,9 @@ class SLN_Markov_simple(Vol_model):
     def __init__(self,
                  sigma_0: float=1.0, 
                  sigma_1: float=1.0, 
-                 lambda_: float=0.0, 
+                 intensity=None,
+                 vov=None,
+                 marking_mode='intensity',
                  shift: float=0.0,
                  mixing: float=0.0,
                  L: float=0.0,
@@ -34,7 +36,12 @@ class SLN_Markov_simple(Vol_model):
                  n_strikes: int=50,
                 ) -> None:
         
-        super().__init__(f=f, 
+        super().__init__(f=f,
+                         sigma_0=sigma_0,
+                         sigma_1=sigma_1,
+                         intensity=intensity,
+                         vov=vov,
+                         marking_mode=marking_mode,
                          T_expiry=T_expiry,
                          vol_type=vol_type,
                          logmoneyness_lo=logmoneyness_lo,
@@ -44,33 +51,9 @@ class SLN_Markov_simple(Vol_model):
                          strike_type=strike_type,
                          n_strikes=n_strikes
                         )
-        self._sigma_0 = sigma_0
-        self._sigma_1 = sigma_1
-        self._lambda_ = lambda_
         self._shift = shift
         self._mixing = mixing
         self._L = L
-    
-    @property
-    def sigma_0(self) -> float:
-        return self._sigma_0
-    @sigma_0.setter
-    def sigma_0(self, new_sigma_0: float) -> None:
-        self._sigma_0 = new_sigma_0
-    
-    @property
-    def sigma_1(self) -> float:
-        return self._sigma_1
-    @sigma_1.setter
-    def sigma_1(self, new_sigma_1: float) -> None:
-        self._sigma_1 = new_sigma_1
-        
-    @property
-    def lambda_(self) -> float:
-        return self._lambda_
-    @lambda_.setter
-    def lambda_(self, new_lambda_: float) -> None:
-        self._lambda_ = new_lambda_
     
     @property
     def shift(self) -> float:
@@ -106,11 +89,7 @@ class SLN_Markov_simple(Vol_model):
         return self.shift*self.sigma_1
     
     def __str__(self) -> str:
-        return r'$\sigma_0$={:.2%}, $\sigma_1$={:.2%}, $\lambda$={:.2%}, shift={:.2f}, mixing={:.2f}, L={:.2f}, f={:.2%}'.format(self.sigma_0, self.sigma_1, self.lambda_, self.shift, self.mixing, self.L, self.f)
-    
-    @abc.abstractmethod
-    def smile_func(self, K):
-        pass
+        return r'$\sigma_0$={:.2%}, $\sigma_1$={:.2%}, $\lambda$={:.2%}, shift={:.2f}, mixing={:.2f}, L={:.2f}, f={:.2%}'.format(self.sigma_0, self.sigma_1, self.intensity, self.shift, self.mixing, self.L, self.f)
     
     def total_std(self, t: float) -> float:
         """Total standard deviation between 0 and T_expiry with a vol switch at t
@@ -138,18 +117,10 @@ class SLN_Markov_simple(Vol_model):
         return 1/self.total_std_0*self.log_moneyness(K_shifted)-0.5*self.total_std_0
     
     def integrand(self, K_shifted: float, t: float) -> float:
-        return (self.displaced_f * norm.cdf(self.d1(K_shifted, t)) - K_shifted * norm.cdf(self.d2(K_shifted, t)))*self.lambda_*np.exp(-self.lambda_*t)
+        return (self.displaced_f * norm.cdf(self.d1(K_shifted, t)) - K_shifted * norm.cdf(self.d2(K_shifted, t)))*self.intensity*np.exp(-self.intensity*t)
 
     def remainder(self, K_shifted: float) -> float:
-        return (self.displaced_f * norm.cdf(self.d01(K_shifted)) - K_shifted * norm.cdf(self.d02(K_shifted))) * np.exp(-self.lambda_*self.T_expiry)
-    
-    def option_price(self, K, payoff='Call'):
-        """Returns the call/put price.
-        """
-        if payoff == "Call":
-            return self.call_price(K)
-        elif payoff == "Put":
-            return self.call_price(K) + (K-self.f)
+        return (self.displaced_f * norm.cdf(self.d01(K_shifted)) - K_shifted * norm.cdf(self.d02(K_shifted))) * np.exp(-self.intensity*self.T_expiry)
     
     def call_price(self, K: float) -> float:
         """Returns the call price obtained by averaging the BS call prices
@@ -165,7 +136,9 @@ class SLN_Markov_simple_LN(SLN_Markov_simple):
     def __init__(self, 
                  sigma_0: float=1.0, 
                  sigma_1: float=1.0, 
-                 lambda_: float=0.0, 
+                 intensity=None,
+                 vov=None,
+                 marking_mode='intensity',
                  shift: float=0.0,
                  mixing: float=0.0,
                  L: float=0.0,
@@ -182,7 +155,9 @@ class SLN_Markov_simple_LN(SLN_Markov_simple):
             super().__init__(f=f,
                              sigma_0=sigma_0,
                              sigma_1=sigma_1,
-                             lambda_=lambda_,
+                             intensity=intensity,
+                             vov=vov,
+                             marking_mode=marking_mode,
                              shift=shift,
                              mixing=mixing,
                              L=L,
@@ -226,7 +201,9 @@ class SLN_Markov_simple_N(SLN_Markov_simple):
     def __init__(self, 
                  sigma_0: float=1.0, 
                  sigma_1: float=1.0, 
-                 lambda_: float=0.0, 
+                 intensity=None,
+                 vov=None,
+                 marking_mode='intensity',
                  shift: float=0.0,
                  mixing: float=0.0,
                  L: float=0.0,
@@ -243,7 +220,9 @@ class SLN_Markov_simple_N(SLN_Markov_simple):
             super().__init__(f=f,
                              sigma_0=sigma_0,
                              sigma_1=sigma_1,
-                             lambda_=lambda_,
+                             intensity=intensity,
+                             vov=vov,
+                             marking_mode=marking_mode,
                              shift=shift,
                              mixing=mixing,
                              L=L,
@@ -279,4 +258,7 @@ class SLN_Markov_simple_N(SLN_Markov_simple):
             payoff = 'Call'
             
         price = self.option_price(K, payoff=payoff)
-        return self.IV.vol_from_price(price, self.f, K, self.T_expiry, payoff=payoff)    
+        try:
+            return self.IV.vol_from_price(price, self.f, K, self.T_expiry, payoff=payoff)
+        except:
+            print(self.__str__())
