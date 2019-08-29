@@ -20,6 +20,16 @@ class Implied_vol():
         if self._vol_type not in ['LN', 'N']:
             raise NameError( "Unsupported vol type : {}".format(self._vol_type) )
             
+    @property
+    def vol_type(self) -> str:
+        return self._vol_type
+    @vol_type.setter
+    def vol_type(self, new_vol_type: str) -> None:
+        if new_vol_type not in ['LN', 'N']:
+            raise NameError( "Unsupported vol type : {}".format(new_vol_type) )        
+        else:
+            self._vol_type = new_vol_type
+        
     def price_from_vol_LN(self, vol, f, K, T_expiry, payoff='Call'):
         """
         Black-Scholes Call/Put forward price from volatility, forward, strike, maturity
@@ -29,9 +39,9 @@ class Implied_vol():
         CallPrice   = (f * norm.cdf( d1 ) - K * norm.cdf( d2 ))
 
         if payoff == "Call":
-           return CallPrice
+            return CallPrice
         elif payoff == "Put":
-           return CallPrice + (K-f)
+            return CallPrice + (K-f)
         else:
             raise NameError( "Unsupported payoff : {}".format(payoff) )
 
@@ -60,19 +70,18 @@ class Implied_vol():
                 
     def vol_from_price(self, price, f, K, T_expiry, payoff='Call'):
         """
-        Black-Scholes Call/Put implied volatility from price, the rest of the parameters (strike, rates, maturity) 
-        are provided in the deal terms
+        Black-Scholes Call/Put implied volatility from price, strike and expiry. 
         """
         def target_func( price, vol ):
             return self.price_from_vol(vol, f, K, T_expiry, payoff=payoff) - price 
                      
         try:
-            return brentq( partial( target_func, price ), 1e-6, 1.5 )
-        except:
+            return brentq(partial(target_func, price), 1e-8, 1e2, full_output=False)
+        except Exception as e:
+            print("Error: {}".format(str(e)))
             print('Price: {}, strike: {}, payoff: {}'.format(price, K, payoff))
         
-# ## Generic vol model
-# 
+# Generic vol model
 # Handles option pricing and vol surface interpolation
 class Vol_model(abc.ABC):
     """Generic class for option quoting
