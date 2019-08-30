@@ -36,6 +36,6 @@ Fit a Ornstein-Uhlenbeck process (potentially with Laplace jumps) on historical 
 
 ### volmodels and volmodels_examples
 Libraries for option volatility smile models including:
-* Several models: SVI, displaced LN, SABR and extensions, local vol SABR. Black-Scholes with latent Markov volatility...
+* Several models: SVI, displaced LN, SABR and extensions, local vol SABR. latent Markov volatility (original work)...
 * Implied volatility expansion, extended Hagan formula, Monte Carlo simulations
 * Fitting routine to quoted implied volatility
