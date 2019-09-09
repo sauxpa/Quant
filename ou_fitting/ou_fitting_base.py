@@ -13,7 +13,7 @@ from statsmodels.robust import mad
 from functools import lru_cache
 
 class OU_fitter(abc.ABC):
-    """Estimate OU parameters (mean-reversion, long-term mean, volatility, potentially jump parameters) by the generalized method of moments.
+    """Estimate OU parameters (mean-reversion, long-term mean, volatility, potentially jump parameters) by the generalized method of moments, assuming the process has reached its stationary states (we need identically distributed data, and the law of OU converges to its stationary state).
     Generic class, the theoretical formula for the characteristic function of OU has to be implemented in child classes as its form varies depending on the assumptions (with or without jumps, jump size distribution...)
     """
     def __init__(self, 
@@ -26,7 +26,7 @@ class OU_fitter(abc.ABC):
                  integration_mode: str='hermite',
                  hist_vol_mode: str='mad',
                  n_quadrature: int=10,
-                 regularization: float=0.0
+                 regularization: float=0.0,
                 ) -> None:
         # empirical data
         self._df = df
@@ -54,13 +54,13 @@ class OU_fitter(abc.ABC):
         # bounds for constrained optimization
         self._bounds = []
         
-        # integration mode : scipy QUADPACK quad or Hermite-Gauss quadrature
+        # integration mode : scipy QUADPACK quad or Hermite-Gauss quadrature (preferred)
         self._integration_mode = integration_mode
         
-        # estimation method for historic vol : 'standard' computes the variance
+        # estimation method for historical vol : 'standard' computes the variance
         # of the time scaled increments, 'iqr' uses interquantile range (more
         # robust to outliers, in particular robust to jumps), 'mad' uses the median
-        # absolute deviation
+        # absolute deviation (the last two are preferred)
         self._hist_vol_mode = hist_vol_mode
         
         # in Hermite-Gauss mode, number of points for quadrature
@@ -211,9 +211,6 @@ class OU_fitter(abc.ABC):
         else:
             raise NameError('Unknown historical vol estimation mode : {}'.format(self.hist_vol_mode))
 
-    def reg_weights(self, half_life):
-        return np.matrix(np.diag(2.0 ** (-np.array(list(reversed(range(len(self.df_scaled)))))/(2*half_life))))
-            
     @lru_cache(maxsize=None)
     def theta_regression(self) -> list:
         """Estimation of OU parameters via regression:
@@ -224,8 +221,7 @@ class OU_fitter(abc.ABC):
         x = np.array(self.df_scaled)
         y = np.array(self.df_inc)
         x = sm.add_constant(x)
-#         model = sm.OLS(y, x)
-        model = sm.WLS(y, x, weights=self.reg_weights(10))
+        model = sm.OLS(y, x)
         results = model.fit()
         return [
                 -results.params[1],
@@ -242,7 +238,7 @@ class OU_fitter(abc.ABC):
     def char_func_empirical(self,
                             u: float,
                            ) -> np.complex128:
-        """Empirical characteristic function u -> 1/n*sum_{i=1}^n(exp(juX_i)) where X_i are data samples
+        """Empirical characteristic function u -> 1/n*sum_{i=1}^n(exp(juX_i)) where X_i are data samples. Convergence a.s is not guaranteed by the law of large numbers since the sample are not independent (under the hypothesis that X follows a OU process, the X_i are correlated). However, the correlation between X_i and X_j decays exponentially fast with |i-j|, so one can show convergence in probability of the empirical sum to the expectation (weak law of large numbers, see e.g https://math.stackexchange.com/questions/245327/weak-law-of-large-numbers-for-dependent-random-variables-with-bounded-covariance). 
         """
         return np.exp(self.df*u*1j).mean()[0].astype(np.complex128)
     
