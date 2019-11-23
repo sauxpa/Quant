@@ -575,6 +575,8 @@ class FBM(BM):
         super().__init__(x0=x0, 
                          T=T, 
                          scheme_steps=scheme_steps,
+                         drift=drift,
+                         vol=vol,
                          barrier=barrier,
                          barrier_condition=barrier_condition,
                          noise_params=noise_params,
