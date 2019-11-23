@@ -4,11 +4,11 @@
 import numpy as np
 import abc
 from collections import defaultdict
-from noise import Fractional_Gaussian_Noise
+from .noise import Fractional_Gaussian_Noise
 
 # ## Generic Ito diffusion
 # 𝑑𝑋𝑡=𝑏(𝑡,𝑋𝑡)𝑑𝑡+𝜎(𝑡,𝑋𝑡)𝑑𝑊𝑡.
-# 
+#
 # Supports standard gaussian noise and fractional gaussian noise.
 
 class Ito_diffusion(abc.ABC):
@@ -18,11 +18,11 @@ class Ito_diffusion(abc.ABC):
     Typical example : barrier=0, barrier_condition='absorb'
     (only this one is supported for now)
     """
-    def __init__(self, 
+    def __init__(self,
                  x0: float=0.0,
                  T: float=1.0,
-                 scheme_steps: int=100, 
-                 barrier=None, 
+                 scheme_steps: int=100,
+                 barrier=None,
                  barrier_condition=None,
                  noise_params: defaultdict=defaultdict(int),
                  jump_params: defaultdict=defaultdict(int),
@@ -34,14 +34,14 @@ class Ito_diffusion(abc.ABC):
         self._barrier_condition = barrier_condition
         self._noise_params = noise_params
         self._jump_params = jump_params
-        
+
         noise_type = self._noise_params['type']
         # if a Hurst index is specified but is equal to 0.5
         # then simply use the gaussian noise
         H = self._noise_params.get('H', 0.5)
         if not noise_type or H == 0.5:
             noise_type = 'gaussian'
-        
+
         if noise_type == 'fgaussian':
             self._noise = Fractional_Gaussian_Noise(
                 T=self._T,
@@ -52,21 +52,21 @@ class Ito_diffusion(abc.ABC):
                )
         else:
             self._noise = None
-        
+
     @property
     def x0(self) -> float:
         return self._x0
     @x0.setter
     def x0(self, new_x0: float) -> None:
         self._x0 = new_x0
-    
+
     @property
     def T(self) -> float:
         return self._T
     @T.setter
     def T(self, new_T) -> None:
         self._T = new_T
-    
+
     @property
     def scheme_steps(self) -> int:
         return self._scheme_steps
@@ -89,7 +89,7 @@ class Ito_diffusion(abc.ABC):
     @barrier.setter
     def barrier(self, new_barrier):
         self._barrier = new_barrier
-    
+
     @property
     def barrier_condition(self):
         if self._barrier_condition not in [ None, 'absorb']:
@@ -99,7 +99,7 @@ class Ito_diffusion(abc.ABC):
     @barrier_condition.setter
     def barrier_condition(self, new_barrier_condition):
         self._barrier_condition = barrier_condition
-        
+
     @property
     def noise_params(self) -> defaultdict:
         return self._noise_params
@@ -112,7 +112,7 @@ class Ito_diffusion(abc.ABC):
         H = self._noise_params.get('H', 0.5)
         if not noise_type or H == 0.5:
             noise_type = 'gaussian'
-        
+
         if noise_type == 'fgaussian':
             self._noise = Fractional_Gaussian_Noise(
                 T=self.T,
@@ -123,7 +123,7 @@ class Ito_diffusion(abc.ABC):
                )
         else:
             self._noise = None
-        
+
     @property
     def noise_type(self) -> str:
         noise_type = self.noise_params['type']
@@ -134,59 +134,59 @@ class Ito_diffusion(abc.ABC):
             return noise_type
         else:
             return 'gaussian'
-    
+
     @property
     def noise(self):
         return self._noise
-        
+
     @property
     def jump_params(self) -> defaultdict:
         return self._jump_params
     @jump_params.setter
     def jump_params(self, new_jump_params) -> None:
         self._jump_params = new_jump_params
-    
+
     @property
     def has_jumps(self):
         return len(self.jump_params)>0
-    
+
     @property
     def jump_intensity_func(self):
         """scipy.stats distribution
         """
         return self.jump_params['jump_intensity_func']
-    
+
     @property
     def jump_size_distr(self):
         """scipy.stats distribution
         """
         return self.jump_params['jump_size_distr']
-    
+
     @property
     def scheme_step(self) -> float:
         return self.T/self.scheme_steps
-    
+
     @property
     def scheme_step_sqrt(self) -> float:
         return np.sqrt(self.scheme_step)
-    
+
     @property
     def time_steps(self) -> list:
         return [step*self.scheme_step for step in range(self.scheme_steps+1)]
-    
+
     def barrier_crossed(self, x, y, barrier) -> bool:
         """barrier is crossed if x and y are on each side of the barrier
         """
         return (x<=barrier and y>=barrier) or (x>=barrier and y<=barrier)
-    
+
     @abc.abstractmethod
     def drift(self, t, x):
         pass
-    
+
     @abc.abstractmethod
     def vol(self, t, x):
         pass
-    
+
     @abc.abstractmethod
     def simulate(self):
         pass
