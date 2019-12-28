@@ -4,7 +4,7 @@
 import os
 import time
 import pandas as pd
-from pandas.compat import StringIO
+from io import StringIO
 from zipfile import ZipFile
 from datetime import datetime
 
